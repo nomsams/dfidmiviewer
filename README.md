@@ -21,7 +21,9 @@ npm run dev
 
 ## GitHub Pages
 
-The included workflow tests and builds pull requests and deploys successful `main` builds. In **Settings → Pages**, select **GitHub Actions** as the source. Push to `main` or run the workflow manually. Expected URL: `https://nomsams.github.io/dfidmiviewer/`.
+The included workflow tests and builds pull requests and deploys successful `main` builds. In **Settings → Pages**, select **GitHub Actions** as the source. **Do not select “Deploy from a branch”: publishing the source directory overwrites the compiled app and produces a blank page.** Push to `main` or run the workflow manually. Expected URL: `https://nomsams.github.io/dfidmiviewer/`.
+
+The deployment verifies the Pages source setting, then checks the published HTML and its JavaScript/CSS assets. A green deployment must serve compiled assets within the repository path. You can repeat these checks with `node scripts/verify-pages.mjs source` (requires `GITHUB_TOKEN` with Pages read permission) and `node scripts/verify-pages.mjs site https://nomsams.github.io/dfidmiviewer/`.
 
 Relative asset URLs support repository subdirectories and custom domains. Scripts, styles, favicon and examples need no server rewrite rules. Deployment follows the [Vite GitHub Pages guidance](https://vite.dev/guide/static-deploy.html#github-pages).
 
