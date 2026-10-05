@@ -2,6 +2,10 @@
 
 Import grouting measurements, inspect pressure/flow/volume, and preview or print PDF reports. Swedish, English and Norwegian. All files are processed locally in the browser.
 
+## No warranty
+
+This software is provided **as is, without any warranty whatsoever**, express or implied, to the fullest extent permitted by applicable law. Use it **at your own discretion and risk**. You are responsible for independently verifying all imported data, calculations and printouts before relying on them. The authors and contributors accept no liability for errors, losses or damages arising from its use, to the fullest extent permitted by applicable law. See [LICENSE](LICENSE) for the full license terms.
+
 ## Run and verify
 
 Use Node.js 24 or newer:
