@@ -25,7 +25,9 @@ Relative asset URLs support repository subdirectories and custom domains. Script
 
 Drop DFI archives or `REC.TXT`. Two examples are bundled. Update-only DMJ archives are identified without inventing measurements; measurement archives are decoded by contents regardless of extension.
 
-Classic is a compact monochrome A4 sheet with metadata, summary values, separately labelled measured and recorder-reported end values, and a P/Q/V diagram. Modern uses the same data with colour. **Preview / print PDF** opens the browser's PDF viewer for printing or saving. Complete events, settings, raw data, indicative GIN and signatures are optional. CSV retains every sample's precision.
+Classic is a compact A4 sheet with metadata, summary values, separately labelled measured and recorder-reported end values, and a P/Q/V diagram. It defaults to monochrome; **Colour in Classic diagrams** enables coloured curves, matching axis labels and legends. Modern uses the same data with colour. **Preview / print PDF** opens the browser's PDF viewer for printing or saving. Complete events, settings, raw data, indicative GIN and signatures are optional. CSV retains every sample's precision.
+
+The GIN diagram shows recorded pressure against cumulative volume in both the browser and PDF, using the same axis bounds. The indicative GIN number is measured end pressure × measured end volume. No synthetic constant-GIN reference curve is overlaid. Repeated-volume points and every source sample are preserved.
 
 Company and print preferences persist. Header edits and comments belong to each individual imported record and are not reused for another file. Batch reports preserve each record's identity; the summary uses original record metadata.
 

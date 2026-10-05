@@ -3,10 +3,12 @@ import autoTable, { type UserOptions } from 'jspdf-autotable';
 import { regular, bold } from '../assets/report-font';
 import { computeExtStats, formatDuration, measurementWindows, parseConsignes, sanitizeStem, type DfiRecord, type DfiSample } from './dfi';
 import { describeIssue, STR, type Lang } from './i18n';
+import { chartRange as range, ginPlot } from './charts';
 
 export interface HeaderOverride { site: string; contract: string; job: string; operator: string; pump: string; grout: string }
 export interface ReportOptions {
   company: string; language: Lang; layout: 'modern' | 'classic';
+  classicColour: boolean;
   includeTable: boolean; includeGin: boolean; includeEvents: boolean; includeSettings: boolean; includeVisas: boolean;
   comment: string; header: HeaderOverride;
 }
@@ -88,49 +90,52 @@ function paragraph(doc: jsPDF, opt: ReportOptions, title: string, sub: string, y
   for (const line of lines) { y = room(doc, opt, title, sub, y, 4); doc.text(line, 12, y + 3); y += 4; }
   return y + 2;
 }
-function range(values: number[], extra = 0) {
-  let low = 0, high = extra;
-  for (const v of values) { low = Math.min(low, v); high = Math.max(high, v); }
-  const raw = (high - low) / 4 || .25, power = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].find((n) => n * power >= raw)! * power;
-  return { low: Math.floor(low / step) * step, high: Math.ceil(high / step) * step || step };
-}
 function path(doc: jsPDF, points: Array<[number, number]>) {
-  for (let i = 1; i < points.length; i++) doc.line(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);
+  if (points.length < 2) return;
+  // One continuous path preserves dash spacing across sample boundaries.
+  doc.lines(points.slice(1).map((p, i) => [p[0] - points[i][0], p[1] - points[i][1]]), points[0][0], points[0][1], [1, 1], 'S', false);
 }
 
 /** Every source point, numeric scales and independent P/Q/V axes. No smoothing or decimation. */
-export function drawCombinedChart(doc: jsPDF, rec: DfiRecord, y: number, height: number, t: T, classic: boolean): void {
+export function drawCombinedChart(doc: jsPDF, rec: DfiRecord, y: number, height: number, t: T, monochrome: boolean): void {
   const pts = rec.samples; if (!pts.length) return;
   const limits = rec.events.filter((e) => e.name === 'SetCons').map((e) => parseConsignes(e.data).pressureLimitBar ?? 0);
   const pressure = range([...pts.map((s) => s.pressBar), ...limits], parseConsignes(rec.meta.setConsRaw).pressureLimitBar ?? 0);
   const flow = range(pts.map((s) => s.flowLmin)), volume = range(pts.map((s) => s.volL));
-  const x = 26, top = y + 12, w = 137, h = height - 28;
+  doc.setFont('Report', 'normal'); doc.setFontSize(6.5);
+  // Reserve only the actual label widths; keep both right axes beside the plot.
+  const labelWidth = (r: { low: number; high: number }, unit: string) => Math.max(doc.getTextWidth(unit), ...[r.low, r.high].map((n) => doc.getTextWidth(f(n))));
+  const vx = 198, qx = vx - labelWidth(volume, 'V (l)') - 3;
+  const x = 24, top = y + 12, w = qx - labelWidth(flow, 'Q (l/min)') - 2 - x, h = height - 28;
+  const colours: Array<[number, number, number]> = monochrome ? [[0, 0, 0], [0, 0, 0], [0, 0, 0]] : [[79, 70, 229], [5, 150, 105], [217, 119, 6]];
   const maxT = Math.max(pts.at(-1)!.tTotal, 1);
   const mx = (s: DfiSample) => x + s.tTotal / maxT * w;
   const my = (v: number, r: { low: number; high: number }) => top + h - (v - r.low) / (r.high - r.low) * h;
   doc.setFont('Report', 'bold'); doc.setFontSize(9); doc.setTextColor(0); doc.text(t.diagramPVQ, 105, y + 4, { align: 'center' });
   doc.setFont('Report', 'normal'); doc.setFontSize(6.5);
-  doc.text('P (bar)', x - 2, top - 3, { align: 'right' }); doc.text('Q (l/min)', x + w + 3, top - 3); doc.text('V (l)', 186, top - 3);
+  doc.setTextColor(...colours[0]); doc.text('P (bar)', x - 2, top - 3, { align: 'right' });
+  doc.setTextColor(...colours[1]); doc.text('Q (l/min)', qx, top - 3, { align: 'right' });
+  doc.setTextColor(...colours[2]); doc.text('V (l)', vx, top - 3, { align: 'right' });
   for (let i = 0; i <= 4; i++) {
     const fraction = i / 4, gy = top + h * (1 - fraction), gx = x + w * fraction;
     doc.setLineWidth(.15); doc.setDrawColor(200); doc.line(x, gy, x + w, gy); doc.line(gx, top, gx, top + h);
-    doc.setTextColor(0); doc.text(f(pressure.low + fraction * (pressure.high - pressure.low), 2), x - 2, gy + 1, { align: 'right' });
-    doc.text(f(flow.low + fraction * (flow.high - flow.low), 2), x + w + 3, gy + 1);
-    doc.text(f(volume.low + fraction * (volume.high - volume.low), 2), 186, gy + 1);
+    doc.setTextColor(...colours[0]); doc.text(f(pressure.low + fraction * (pressure.high - pressure.low), 2), x - 2, gy + 1, { align: 'right' });
+    doc.setTextColor(...colours[1]); doc.text(f(flow.low + fraction * (flow.high - flow.low), 2), qx, gy + 1, { align: 'right' });
+    doc.setTextColor(...colours[2]); doc.text(f(volume.low + fraction * (volume.high - volume.low), 2), vx, gy + 1, { align: 'right' });
+    doc.setTextColor(0);
     doc.text(f(maxT * fraction, 1), gx, top + h + 4, { align: 'center' });
   }
   doc.setDrawColor(0); doc.rect(x, top, w, h); doc.text(`${t.timeTotal}`, x + w / 2, top + h + 8, { align: 'center' });
   const series = [
-    { key: 'pressBar' as const, scale: pressure, dash: [], color: [0, 0, 0], label: 'P (bar)' },
-    { key: 'flowLmin' as const, scale: flow, dash: [2, 1], color: classic ? [0, 0, 0] : [5, 150, 105], label: 'Q (l/min)' },
-    { key: 'volL' as const, scale: volume, dash: [.4, 1], color: classic ? [0, 0, 0] : [217, 119, 6], label: 'V (l)' },
+    { key: 'pressBar' as const, scale: pressure, dash: [], color: colours[0], label: 'P (bar)' },
+    { key: 'flowLmin' as const, scale: flow, dash: [2, 1], color: colours[1], label: 'Q (l/min)' },
+    { key: 'volL' as const, scale: volume, dash: [.4, 1], color: colours[2], label: 'V (l)' },
   ];
   series.forEach((series, i) => {
     doc.setDrawColor(...series.color as [number, number, number]); doc.setLineWidth(.35); doc.setLineDashPattern(series.dash, 0);
     path(doc, pts.map((s) => [mx(s), my(s[series.key], series.scale)]));
     const lx = 35 + i * 48; doc.line(lx, y + height - 2, lx + 9, y + height - 2);
-    doc.setTextColor(0); doc.text(series.label, lx + 11, y + height - 1);
+    doc.setTextColor(...series.color); doc.text(series.label, lx + 11, y + height - 1);
   });
   doc.setLineDashPattern([], 0);
   // Setpoint history is drawn over its actual time intervals, including changes.
@@ -144,11 +149,10 @@ export function drawCombinedChart(doc: jsPDF, rec: DfiRecord, y: number, height:
   });
   doc.setLineDashPattern([], 0);
 }
-function ginChart(doc: jsPDF, rec: DfiRecord, y: number, t: T, classic: boolean) {
-  const st = computeExtStats(rec), pts = rec.samples;
+export function drawGinChart(doc: jsPDF, rec: DfiRecord, y: number, t: T, monochrome: boolean) {
+  const { points, pressure: p, volume: v } = ginPlot(rec);
   doc.setFont('Report', 'bold'); doc.setFontSize(9); doc.setTextColor(0); doc.text(t.ginTitle, 12, y + 4);
   doc.setFont('Report', 'normal'); doc.setFontSize(7); doc.text(safe(t.ginHint), 12, y + 9);
-  const p = range(pts.map((s) => s.pressBar)), v = range(pts.map((s) => s.volL));
   const x = 26, top = y + 16, w = 160, h = 48;
   for (let i = 0; i <= 4; i++) {
     const q = i / 4; doc.setDrawColor(200); doc.setLineWidth(.15);
@@ -156,12 +160,10 @@ function ginChart(doc: jsPDF, rec: DfiRecord, y: number, t: T, classic: boolean)
     doc.text(f(p.high - q * (p.high - p.low)), x - 2, top + h * q + 1, { align: 'right' });
     doc.text(f(v.low + q * (v.high - v.low)), x + w * q, top + h + 4, { align: 'center' });
   }
-  doc.setDrawColor(classic ? 0 : 79, classic ? 0 : 70, classic ? 0 : 229); doc.setLineWidth(.35);
-  path(doc, pts.map((s) => [x + (s.volL - v.low) / (v.high - v.low) * w, top + h - (s.pressBar - p.low) / (p.high - p.low) * h]));
-  doc.setLineDashPattern([2, 1], 0); const curve: Array<[number, number]> = [];
-  for (let i = 1; i <= 160; i++) { const vv = v.high * i / 160, pp = st.ginEnd / vv;
-    if (pp >= p.low && pp <= p.high) curve.push([x + (vv - v.low) / (v.high - v.low) * w, top + h - (pp - p.low) / (p.high - p.low) * h]); }
-  path(doc, curve); doc.setLineDashPattern([], 0); doc.setTextColor(0); doc.text('V (l)', 186, top + h + 9, { align: 'right' });
+  doc.setDrawColor(monochrome ? 0 : 79, monochrome ? 0 : 70, monochrome ? 0 : 229); doc.setLineWidth(.35);
+  doc.setLineDashPattern([], 0);
+  path(doc, points.map((s) => [x + (s.v - v.low) / (v.high - v.low) * w, top + h - (s.pBar - p.low) / (p.high - p.low) * h]));
+  doc.setTextColor(0); doc.text('P (bar)', x - 2, top - 3, { align: 'right' }); doc.text('V (l)', 186, top + h + 9, { align: 'right' });
 }
 export function reportFileName(rec: DfiRecord): string {
   const job = rec.meta.jobName.trim() ? sanitizeStem(rec.meta.jobName) + '_' : '';
@@ -192,7 +194,7 @@ export function generateReportPdf(rec: DfiRecord, opt: ReportOptions): jsPDF {
       [t.p30, f(st.p30Bar), f(st.q30Lmin), `${t.measDur}: ${formatDuration(st.durationMeasure)}`],
     ] });
     y = paragraph(doc, opt, title, sub, y, t.calcHint);
-    y = room(doc, opt, title, sub, y, 88); drawCombinedChart(doc, rec, y, 84, t, opt.layout === 'classic'); y += 88;
+    y = room(doc, opt, title, sub, y, 88); drawCombinedChart(doc, rec, y, 84, t, opt.layout === 'classic' && !opt.classicColour); y += 88;
   } else y = paragraph(doc, opt, title, sub, y, t.noData);
   y = paragraph(doc, opt, title, sub, y, `${t.sourceLabel}: ${rec.meta.source === 'binary' ? t.binarySource : rec.meta.source === 'text' ? t.textSource : '-'}`);
   for (const warning of rec.warnings.filter((w) => !['binarySource', 'textSource'].includes(w))) y = paragraph(doc, opt, title, sub, y, describeIssue(warning, opt.language));
@@ -220,8 +222,8 @@ export function generateReportPdf(rec: DfiRecord, opt: ReportOptions): jsPDF {
     rec.meta.channels.forEach((c, i) => rows.push([c, rec.meta.units[i] ?? '-']));
     if (rows.length) { appendix(); y = table(doc, opt, title, sub, y, { head: [[t.settings, t.valueCol]], body: rows }); }
   }
-  if (opt.includeGin && st.ginEnd > 0 && rec.samples.length) {
-    appendix(); ginChart(doc, rec, y, t, opt.layout === 'classic');
+  if (opt.includeGin && rec.samples.length) {
+    appendix(); drawGinChart(doc, rec, y, t, opt.layout === 'classic' && !opt.classicColour);
     y = paragraph(doc, opt, title, sub, y + 80, `${t.ginValue}: ${f(st.ginEnd)} bar·l`);
   }
   if (opt.includeTable && rec.samples.length) {

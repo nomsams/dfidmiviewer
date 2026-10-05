@@ -4,6 +4,7 @@ import {
 } from 'recharts';
 import { computeExtStats, csvText, downsample, formatDuration, parseDfiFile, parseSetpointBar, sanitizeStem, type DfiRecord } from './lib/dfi';
 import { describeIssue, LANG_LABEL, LANGS, STR, type Lang } from './lib/i18n';
+import { axisTicks, ginPlot } from './lib/charts';
 import { emptyHeader, generateSummaryPdf, generateReportPdf, reportFileName, type HeaderOverride, type ReportOptions } from './lib/pdf';
 
 type TimeBase = 'total' | 'meas';
@@ -13,6 +14,7 @@ const LS_KEY = 'dfi-viewer-prefs-v3';
 interface Prefs {
   lang: Lang;
   layout: 'modern' | 'classic';
+  classicColour: boolean;
   company: string;
   header: HeaderOverride;
   comment: string;
@@ -25,7 +27,7 @@ interface Prefs {
 
 function loadPrefs(): Prefs {
   const d: Prefs = {
-    lang: 'sv', layout: 'classic', company: '', header: emptyHeader(), comment: '',
+    lang: 'sv', layout: 'classic', classicColour: false, company: '', header: emptyHeader(), comment: '',
     includeTable: false, includeGin: false, includeEvents: true, includeSettings: true, includeVisas: false,
   };
   try {
@@ -33,7 +35,7 @@ function loadPrefs(): Prefs {
     if (raw) {
       const saved = JSON.parse(raw);
       const merged = { ...d };
-      for (const key of ['includeTable', 'includeGin', 'includeEvents', 'includeSettings', 'includeVisas'] as const) if (typeof saved[key] === 'boolean') merged[key] = saved[key];
+      for (const key of ['classicColour', 'includeTable', 'includeGin', 'includeEvents', 'includeSettings', 'includeVisas'] as const) if (typeof saved[key] === 'boolean') merged[key] = saved[key];
       if (LANGS.includes(saved.lang)) merged.lang = saved.lang;
       if (saved.layout === 'classic' || saved.layout === 'modern') merged.layout = saved.layout;
       if (typeof saved.company === 'string') merged.company = saved.company;
@@ -122,20 +124,14 @@ export default function App() {
       v: s.volL,
     }));
   }, [active, timeBase]);
-  const ginData = useMemo(() => {
-    if (!active) return [];
-    return active.samples.map((s) => ({
-      v: s.volL,
-      pBar: s.pressBar,
-    }));
-  }, [active]);
+  const ginData = useMemo(() => active ? ginPlot(active) : null, [active]);
 
   const compareData = useMemo(() => (compareMode ? mergeCompareTime(records) : []), [compareMode, records]);
   const compareFiles = useMemo(() => records.filter((r) => r.samples.length > 0).slice(0, 5), [records]);
 
   function reportOpts(rec?: DfiRecord): ReportOptions {
     return {
-      company: prefs.company, language: prefs.lang, layout: prefs.layout, includeTable: prefs.includeTable,
+      company: prefs.company, language: prefs.lang, layout: prefs.layout, classicColour: prefs.classicColour, includeTable: prefs.includeTable,
       includeGin: prefs.includeGin, includeEvents: prefs.includeEvents,
       includeSettings: prefs.includeSettings, includeVisas: prefs.includeVisas,
       comment: rec ? comments.get(rec) ?? '' : '', header: rec ? headers.get(rec) ?? emptyHeader() : emptyHeader(),
@@ -276,6 +272,7 @@ export default function App() {
               </div>
             </div>
             <div className="space-y-1.5 text-sm">
+              {prefs.layout === 'classic' && <Check label={t.classicColour} value={prefs.classicColour} onChange={(v) => set('classicColour', v)} />}
               <Check label={t.includeTable} value={prefs.includeTable} onChange={(v) => set('includeTable', v)} />
               <Check label={t.includeGin} value={prefs.includeGin} onChange={(v) => set('includeGin', v)} />
               <Check label={t.includeEvents} value={prefs.includeEvents} onChange={(v) => set('includeEvents', v)} />
@@ -397,12 +394,12 @@ export default function App() {
                         <div className="text-[11px] text-slate-400 mb-2">{t.ginHint}</div>
                         <div className="h-[200px]">
                           <ResponsiveContainer>
-                            <LineChart data={ginData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                            <LineChart data={ginData?.points ?? []} margin={{ top: 8, right: 8, left: 0, bottom: 12 }}>
                               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                              <XAxis type="number" domain={['dataMin', 'dataMax']} dataKey="v" tick={{ fontSize: 11 }} label={{ value: 'V (l)', fontSize: 11 }} />
-                              <YAxis tick={{ fontSize: 11 }} label={{ value: 'bar', angle: -90, fontSize: 11 }} />
-                              <Tooltip />
-                              <Line dataKey="pBar" name="P (bar)" dot={false} strokeWidth={2} stroke="#4f46e5" />
+                              <XAxis type="number" domain={ginData ? [ginData.volume.low, ginData.volume.high] : [0, 1]} ticks={ginData ? axisTicks(ginData.volume) : undefined} dataKey="v" tick={{ fontSize: 11 }} tickFormatter={(v: number) => v.toFixed(2)} label={{ value: 'V (l)', fontSize: 11, position: 'insideBottom', offset: -8 }} />
+                              <YAxis domain={ginData ? [ginData.pressure.low, ginData.pressure.high] : [0, 1]} ticks={ginData ? axisTicks(ginData.pressure) : undefined} tick={{ fontSize: 11 }} tickFormatter={(v: number) => v.toFixed(2)} label={{ value: 'P (bar)', angle: -90, fontSize: 11 }} />
+                              <Tooltip formatter={(v) => [Number(v).toFixed(3), 'P (bar)']} labelFormatter={(v) => `V = ${Number(v).toFixed(3)} l`} />
+                              <Line type="linear" isAnimationActive={false} dataKey="pBar" name="P (bar)" dot={false} strokeWidth={2} stroke="#4f46e5" />
                             </LineChart>
                           </ResponsiveContainer>
                         </div>

@@ -28,7 +28,9 @@ Recorder clocks can differ slightly from event wall-clock date differences. Acti
 
 ## Print parity
 
-Classic reconstructs a compact monochrome A4 sheet: metadata, summary, calibrated combined plot, comment and optional signatures, with complete appendices. Original per-hole print specimens were not present in the inspected workspace. Existing earlier PDFs came from the port and cannot prove parity. Exact original typography, placement and configurable summary options remain unverified.
+Classic reconstructs a compact A4 sheet: metadata, summary, calibrated combined plot, comment and optional signatures, with complete appendices. It defaults to monochrome and can use coloured diagrams. Original per-hole print specimens were not present in the inspected workspace. Existing earlier PDFs came from the port and cannot prove parity. Exact original typography, placement and configurable summary options remain unverified.
+
+The GIN diagram uses the same full recorded pressure/volume trace and numerical bounds in the browser and PDF. The previous PDF-only constant-GIN hyperbola has been removed; it was a calculated reference, not recorded data. The indicative GIN number still uses measured end pressure × measured end volume. Colour selection and wider print geometry do not change source values or calculations.
 
 Tests cover real fixtures, text/binary import, units and reordered channels, malformed archives/XML, binary checksums, active-window statistics, end-value provenance, all languages/layouts, spike retention, uncapped tables and multi-page summaries. Rendered checks cover Nordic glyphs, boundaries, continuation headers/footers and the last raw sample.
 
