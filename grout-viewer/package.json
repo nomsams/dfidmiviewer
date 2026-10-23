@@ -1,0 +1,14 @@
+{
+  "name": "grout-report-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static viewer and printer for DFI grouting measurement files (no build step).",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "serve": "node tools/serve.mjs",
+    "check:i18n": "node tools/check-i18n.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

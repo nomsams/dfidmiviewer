@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grout Report Viewer</title>
+<meta name="description" content="Open DFI measurement files, review the curves and print or save the report. Runs entirely in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Cpath d='M5 22 11 14l5 5 6-9 5 7' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body data-theme="auto" data-mode="simple">
+
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M5 22 11 14l5 5 6-9 5 7" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span data-i="app.name">Grout Report Viewer</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="seg" id="modeSeg" role="group" aria-label="Mode">
+    <button type="button" data-mode="simple" data-i="mode.simple">Simple</button>
+    <button type="button" data-mode="advanced" data-i="mode.advanced">Advanced</button>
+  </div>
+  <label class="sel"><span class="sr" data-i="ui.theme">Theme</span>
+    <select id="themeSel"></select></label>
+  <label class="sel"><span class="sr" data-i="ui.language">Language</span>
+    <select id="langSel"></select></label>
+</header>
+
+<main id="app">
+  <!-- Welcome / upload -->
+  <section id="welcome" class="welcome">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose files">
+      <svg viewBox="0 0 48 48" width="56" height="56" aria-hidden="true"><path d="M24 33V11m0 0-8 8m8-8 8 8M9 33v4a3 3 0 0 0 3 3h24a3 3 0 0 0 3-3v-4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h1 data-i="welcome.title">Open your measurement file</h1>
+      <p data-i="welcome.sub">Drag a .DFI file here, or choose it from your computer. You will see the results and can print the report right away.</p>
+      <div class="row"><button type="button" class="btn primary big" id="pickBtn" data-i="welcome.choose">Choose file…</button>
+        <button type="button" class="btn big" id="sampleBtn" data-i="welcome.example">Try an example</button></div>
+      <p class="fine" data-i="welcome.privacy">Your files stay on this computer. Nothing is uploaded.</p>
+    </div>
+    <ul class="steps3">
+      <li><b>1</b><span data-i="steps.1">Open a file</span></li>
+      <li><b>2</b><span data-i="steps.2">Check the results</span></li>
+      <li><b>3</b><span data-i="steps.3">Print or save as PDF</span></li>
+    </ul>
+  </section>
+
+  <!-- Workspace -->
+  <section id="workspace" hidden>
+    <div class="recbar" id="recbar"></div>
+    <div id="notices" class="notices"></div>
+
+    <!-- SIMPLE -->
+    <div id="simple">
+      <ol class="stepper" aria-label="Progress">
+        <li class="done"><b>1</b> <span data-i="steps.1">Open a file</span></li>
+        <li class="now"><b>2</b> <span data-i="steps.2">Check the results</span></li>
+        <li><b>3</b> <span data-i="steps.3">Print or save as PDF</span></li>
+      </ol>
+      <div class="card hero">
+        <div class="hero-t"><h2 id="sTitle"></h2><p id="sSub"></p></div>
+        <div class="kpis" id="sKpis"></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3 data-i="chart.title">Pressure, flow and volume</h3>
+          <div class="chips" id="sChips"></div></div>
+        <div class="chartbox"><canvas id="sChart" aria-label="Chart"></canvas><div class="tip" id="sTip" hidden></div></div>
+        <p class="fine" data-i="chart.hint">Move the mouse over the chart to read values. Scroll to zoom, drag to move, double-click to reset.</p>
+      </div>
+      <div class="card actions">
+        <h3 data-i="print.title">Print or save the report</h3>
+        <div class="layout-pick" id="sLayout" role="radiogroup" aria-label="Report style">
+          <label><input type="radio" name="sLay" value="classic"><span><b data-i="lay.classic">Original</b><small data-i="lay.classic.d">Same layout as the original software</small></span></label>
+          <label><input type="radio" name="sLay" value="modern"><span><b data-i="lay.modern">Modern</b><small data-i="lay.modern.d">Cleaner look with colour cards</small></span></label>
+        </div>
+        <div class="row" id="sOrigOpts">
+          <label class="f grow"><span data-i="simple.report">Report</span><select id="sReport"><option value="time" data-i="o.rep.time">Pressure and flow in accordance to time</option><option value="pvg" data-i="o.rep.pvg">Pressure/Volume/GIN</option><option value="pvf" data-i="o.rep.pvf">Pressure/Volume/Flow</option></select></label>
+          <label class="chk"><input type="checkbox" id="sFlow"> <span data-i="simple.flow">Also draw the flow curve</span></label>
+          <label class="chk"><input type="checkbox" id="sAuto"> <span data-i="simple.auto">Fit the axes to the data automatically</span></label>
+        </div>
+        <div class="row">
+          <button type="button" class="btn primary big" id="sPrint" data-i="btn.print">Print</button>
+          <button type="button" class="btn big" id="sPdf" data-i="btn.pdf">Save as PDF</button>
+          <button type="button" class="btn big" id="sPreview" data-i="btn.preview">Preview</button>
+        </div>
+        <details class="note"><summary data-i="note.add">Add a note to the report (optional)</summary>
+          <textarea id="sComment" rows="3" data-i-ph="note.ph" placeholder="Observations…"></textarea></details>
+        <div class="row small" id="sMore"></div>
+      </div>
+    </div>
+
+    <!-- ADVANCED -->
+    <div id="advanced">
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <div id="panels">
+        <section class="panel" data-panel="overview"></section>
+        <section class="panel" data-panel="chart">
+          <div class="card">
+            <div class="card-h"><h3 data-i="chart.title">Pressure, flow and volume</h3>
+              <div class="chips" id="aChips"></div></div>
+            <div class="toolbar">
+              <label><span data-i="opt.timebase">Time base</span>
+                <select id="aTime"><option value="tt" data-i="opt.tb.total">Total time</option><option value="tm" data-i="opt.tb.meas">Measuring time</option></select></label>
+              <label class="chk"><input type="checkbox" id="aWin" checked> <span data-i="chart.windows">Shade measuring periods</span></label>
+              <label class="chk"><input type="checkbox" id="aMark" checked> <span data-i="chart.markers">Pump start/stop lines</span></label>
+              <label><span data-i="chart.axes">Axes</span> <select id="aAxis"><option value="auto" data-i="d.dec.auto">Automatic</option><option value="manual" data-i="chart.manual">Manual</option></select></label>
+              <label class="num"><span>P max (bar)</span> <input type="number" id="aMaxP" min="0" step="any" placeholder="auto"></label>
+              <label class="num"><span>Q max (l/min)</span> <input type="number" id="aMaxQ" min="0" step="any" placeholder="auto"></label>
+              <label class="num"><span>V max (l)</span> <input type="number" id="aMaxV" min="0" step="any" placeholder="auto"></label>
+              <button type="button" class="btn small" id="aReset" data-i="chart.reset">Reset zoom</button>
+            </div>
+            <div class="chartbox tall"><canvas id="aChart" aria-label="Chart"></canvas><div class="tip" id="aTip" hidden></div></div>
+          </div>
+        </section>
+        <section class="panel" data-panel="data"></section>
+        <section class="panel" data-panel="events"></section>
+        <section class="panel" data-panel="params"></section>
+        <section class="panel" data-panel="report">
+          <div class="designer">
+            <form id="designer" class="card form" autocomplete="off" onsubmit="return false">
+              <fieldset><legend data-i="d.layout">Layout</legend>
+                <div class="grid2">
+                  <label class="radio"><input type="radio" name="dLay" value="classic"> <span data-i="lay.classic">Original</span></label>
+                  <label class="radio"><input type="radio" name="dLay" value="modern"> <span data-i="lay.modern">Modern</span></label>
+                  <label class="radio"><input type="radio" name="dLay" value="cards"> <span data-i="lay.cards">Cards</span></label>
+                </div>
+                <label class="f"><span data-i="calc.method">Calculation method</span>
+                  <select data-opt="method"><option value="original" data-i="calc.original">Original software (sample average)</option><option value="weighted" data-i="calc.weighted">Time-weighted, measuring periods only</option></select></label>
+                <label class="f"><span data-i="opt.timebase">Time base</span>
+                  <select data-opt="timeBase"><option value="total" data-i="opt.tb.total">Total time</option><option value="meas" data-i="opt.tb.meas">Measuring time</option></select></label>
+              </fieldset>
+
+              <fieldset id="origSet"><legend data-i="d.orig">Original reports (as printed by the original software)</legend>
+                <div class="grid1">
+                  <label class="chk"><input type="checkbox" data-opt="o.reports.time"> <span data-i="o.rep.time">Pressure and flow in accordance to time</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.reports.pvg"> <span data-i="o.rep.pvg">Pressure/Volume/GIN</span></label>
+                  <label class="chk sub"><input type="checkbox" data-opt="o.pvgPen"> <span data-i="opt.pvgPen">Penetrability curve in the Pressure/Volume/GIN report</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.reports.pvf"> <span data-i="o.rep.pvf">Pressure/Volume/Flow</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.reports.hist"> <span data-i="o.rep.vol">Distribution of the grouted volumes</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.reports.lug"> <span data-i="o.rep.lug">Water test diagram (Lugeon)</span></label>
+                </div>
+                <div class="grid2"><label class="f"><span data-i="d.punit">Pressure unit</span><select data-opt="o.pUnit"><option value="bar">bar</option><option value="kgcm2">kg/cm²</option></select></label>
+                <label class="f"><span data-i="d.decimals">Decimals of printed values</span><input type="number" min="0" max="4" step="1" data-opt="o.decimals"></label></div>
+                <label class="f"><span data-i="d.axes">Axes</span><select data-opt="o.axes"><option value="manual" data-i="d.axes.manual">As original (scales below; empty = automatic)</option><option value="auto" data-i="d.axes.auto">Automatic: fit all axes to the data</option></select></label>
+                <label class="f"><span data-i="d.tcm">Time: 1 cm = (s)</span><input type="number" min="0" step="any" data-opt="o.tcm" placeholder="auto"></label>
+                <div class="curves">
+                  <div class="crow"><label class="chk"><input type="checkbox" data-opt="o.p.on"> <span data-i="cv.p">cv.p</span></label><input type="color" data-opt="o.p.color" aria-label="colour"><label class="num"><span data-i="d.scale">scale</span><input type="number" min="0" step="any" data-opt="o.p.scale"></label></div>
+                  <div class="crow"><label class="chk"><input type="checkbox" data-opt="o.q.on"> <span data-i="cv.q">cv.q</span></label><input type="color" data-opt="o.q.color" aria-label="colour"><label class="num"><span data-i="d.scale">scale</span><input type="number" min="0" step="any" data-opt="o.q.scale"></label></div>
+                  <div class="crow"><label class="chk"><input type="checkbox" data-opt="o.v.on"> <span data-i="cv.v">cv.v</span></label><input type="color" data-opt="o.v.color" aria-label="colour"><label class="num"><span data-i="d.scale">scale</span><input type="number" min="0" step="any" data-opt="o.v.scale"></label></div>
+                  <div class="crow"><label class="chk"><input type="checkbox" data-opt="o.d.on"> <span data-i="o.pen.short">o.pen.short</span></label><input type="color" data-opt="o.d.color" aria-label="colour"><label class="num"><span data-i="d.scale">scale</span><input type="number" min="0" step="any" data-opt="o.d.scale"></label></div>
+                  <div class="crow"><label class="chk"><input type="checkbox" data-opt="o.g.on"> <span data-i="o.gin.curve">o.gin.curve</span></label><input type="color" data-opt="o.g.color" aria-label="colour"><label class="num"><span data-i="d.scale">scale</span><input type="number" min="0" step="any" data-opt="o.g.scale"></label></div>
+                </div>
+                <div class="crow"><label class="chk"><input type="checkbox" data-opt="o.smoothP.on"> <span data-i="d.smoothP">Smooth pressure</span></label><span></span><label class="num"><input type="number" min="1" step="1" data-opt="o.smoothP.s"> <small>s</small></label></div>
+                <div class="crow"><label class="chk"><input type="checkbox" data-opt="o.smoothQ.on"> <span data-i="d.smoothQ">Smooth flow</span></label><span></span><label class="num"><input type="number" min="1" step="1" data-opt="o.smoothQ.s"> <small>s</small></label></div>
+                <label class="f"><span data-i="d.title1">Header title 1 (default: site)</span><input type="text" data-opt="o.title1"></label>
+                <label class="f"><span data-i="d.title2">Header title 2 (default: GROUTING)</span><input type="text" data-opt="o.title2"></label>
+                <label class="f"><span data-i="d.boreholeLabel">Borehole label</span><input type="text" data-opt="o.boreholeLabel"></label>
+                <label class="f"><span data-i="d.logo">Logo for the header</span><span class="row small"><input type="file" id="logoFile" accept="image/png,image/jpeg"><button type="button" class="btn small" id="logoClear" data-i="d.logoClear">Remove logo</button></span></label>
+                <div class="grid2">
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.oneSleeve"> <span data-i="opt.oneSleeve">opt.oneSleeve</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.limits"> <span data-i="opt.limits">opt.limits</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.sleeveInfo"> <span data-i="opt.sleeveInfo">opt.sleeveInfo</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.stopType"> <span data-i="opt.stopType">opt.stopType</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.endTime"> <span data-i="opt.endTime">opt.endTime</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.duration"> <span data-i="opt.duration">opt.duration</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.groutType"> <span data-i="opt.groutType">opt.groutType</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.totalVol"> <span data-i="opt.totalVol">opt.totalVol</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.volLimit"> <span data-i="opt.volLimit">opt.volLimit</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.avgPQ"> <span data-i="opt.avgPQ">opt.avgPQ</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.finalP"> <span data-i="opt.finalP">opt.finalP</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="o.sel.eff"> <span data-i="opt.eff">opt.eff</span></label>
+                </div>
+                <label class="f"><span data-i="d.dec">Decimal separator</span><select data-opt="o.dec"><option value="" data-i="d.dec.auto">Automatic</option><option value=".">1.5</option><option value=",">1,5</option></select></label>
+                <details class="note"><summary data-i="d.lug">Water test (Lugeon) settings</summary>
+                  <label class="f"><span data-i="d.lug.length">Tested length (m, empty = bottom - top level)</span><input type="number" min="0" step="any" data-opt="o.lug.lengthM"></label>
+                  <label class="f"><span data-i="d.lug.static">Static water level above the test (m)</span><input type="number" min="0" step="any" data-opt="o.lug.staticM"></label>
+                  <label class="f"><span data-i="d.lug.loss">Head loss (bar)</span><input type="number" min="0" step="any" data-opt="o.lug.lossBar"></label>
+                  <label class="f"><span data-i="d.lug.minstage">Shortest stage when detected from pressure (s)</span><input type="number" min="5" step="1" data-opt="o.lug.minStage"></label></details>
+                <label class="f"><span data-i="d.density">Grout density for effective pressure (kg/m³)</span><input type="number" min="0" step="any" data-opt="o.density"></label>
+              </fieldset>
+              <fieldset><legend data-i="d.sections">Sections (Modern and Cards layouts)</legend>
+                <div class="grid2">
+                  <label class="chk"><input type="checkbox" data-opt="show.bilan"> <span data-i="sec.bilan">Results table</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.setpoints"> <span data-i="sec.setpoints">Site setpoints</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.diagram"> <span data-i="sec.diagram">Diagram</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.markers"> <span data-i="sec.markers">Measuring start/stop lines</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.commentCol"> <span data-i="sec.commentCol">Comments column (pump events)</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.observations"> <span data-i="sec.obs">Observation frame</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.visas"> <span data-i="sec.visas">Signature boxes</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.ginPage"> <span data-i="sec.ginPage">GIN page (pressure / volume)</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.certificate"> <span data-i="sec.cert">“Original edition” mark</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.events"> <span data-i="sec.events">Events list</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.params"> <span data-i="sec.params">Parameters list</span></label>
+                  <label class="chk"><input type="checkbox" data-opt="show.table"> <span data-i="sec.table">All measurement rows</span></label>
+                </div>
+              </fieldset>
+              <fieldset><legend data-i="d.curves">Curves (Modern and Cards layouts)</legend>
+                <div class="curves">
+                  <div class="crow"><label class="chk"><input type="checkbox" data-opt="show.pressure"> <span>P — <span data-i="cv.p">Pressure</span></span></label><input type="color" data-opt="colors.p" aria-label="colour"><label class="num"><span data-i="d.cm">1 cm =</span><input type="number" min="0" step="any" data-opt="scales.p" placeholder="auto"></label></div>
+                  <div class="crow"><label class="chk"><input type="checkbox" data-opt="show.flow"> <span>Q — <span data-i="cv.q">Flow</span></span></label><input type="color" data-opt="colors.q" aria-label="colour"><label class="num"><span data-i="d.cm">1 cm =</span><input type="number" min="0" step="any" data-opt="scales.q" placeholder="auto"></label></div>
+                  <div class="crow"><label class="chk"><input type="checkbox" data-opt="show.volume"> <span>V — <span data-i="cv.v">Volume</span></span></label><input type="color" data-opt="colors.v" aria-label="colour"><label class="num"><span data-i="d.cm">1 cm =</span><input type="number" min="0" step="any" data-opt="scales.v" placeholder="auto"></label></div>
+                  <div class="crow"><label class="chk"><input type="checkbox" data-opt="show.d"> <span>D — <span data-i="cv.d">Flow / pressure</span></span></label><input type="color" data-opt="colors.d" aria-label="colour"><label class="num"><span data-i="d.cm">1 cm =</span><input type="number" min="0" step="any" data-opt="scales.d" placeholder="auto"></label></div>
+                  <div class="crow"><label class="chk"><input type="checkbox" data-opt="show.gin"> <span>GIN — <span data-i="cv.g">Pressure × volume</span></span></label><input type="color" data-opt="colors.g" aria-label="colour"><label class="num"><span data-i="d.cm">1 cm =</span><input type="number" min="0" step="any" data-opt="scales.g" placeholder="auto"></label></div>
+                  <div class="crow"><span class="grow"><span data-i="cv.t">Time</span></span><span></span><label class="num"><span data-i="d.cm">1 cm =</span><input type="number" min="0" step="any" data-opt="scales.t" placeholder="auto"> <small>s</small></label></div>
+                </div>
+                <label class="chk"><input type="checkbox" data-opt="mono"> <span data-i="d.mono">Black-and-white curves (distinguished by line style)</span></label>
+                <label class="f"><span data-i="d.ginlimit">GIN envelope P × V = (bar·l, 0 = from file)</span><input type="number" min="0" step="any" data-opt="ginLimit"></label>
+              </fieldset>
+              <fieldset><legend data-i="d.header">Header (this file)</legend>
+                <label class="f"><span data-i="f.site">Site</span><input type="text" data-ov="site"></label>
+                <label class="f"><span data-i="f.contract">Contract</span><input type="text" data-ov="contract"></label>
+                <label class="f"><span data-i="f.borehole">Borehole</span><input type="text" data-ov="job"></label>
+                <label class="f"><span data-i="f.operator">Operator</span><input type="text" data-ov="operator"></label>
+                <label class="f"><span data-i="f.pump">Pump</span><input type="text" data-ov="pump"></label>
+                <label class="f"><span data-i="f.grout">Grout</span><input type="text" data-ov="grout"></label>
+                <label class="f"><span data-i="f.zone">Zone</span><input type="text" data-ov="zone"></label>
+                <label class="f"><span data-i="f.sleeve">Sleeve</span><input type="text" data-ov="sleeve" placeholder="1"></label>
+                <label class="f"><span data-i="f.top">Top level (m)</span><input type="text" data-ov="top"></label>
+                <label class="f"><span data-i="f.bottom">Bottom level (m)</span><input type="text" data-ov="bottom"></label>
+                <label class="f"><span data-i="d.company">Company name (all reports)</span><input type="text" data-opt="company"></label>
+              </fieldset>
+              <fieldset><legend data-i="d.obs">Observations and signatures</legend>
+                <label class="f"><span data-i="d.obstitle">Frame title</span><input type="text" data-opt="obsTitle"></label>
+                <label class="f"><span data-i="d.obsheight">Frame height (mm)</span><input type="number" min="8" max="80" data-opt="obsHeight"></label>
+                <label class="f"><span data-i="d.comment">Comment (this file)</span><textarea rows="3" data-ov-comment></textarea></label>
+                <label class="f"><span data-i="d.visacount">Number of signature boxes</span>
+                  <select data-opt="visaCount"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+                <label class="f"><span data-i="d.visa1">Box 1 title</span><input type="text" data-opt="visaTitles.0"></label>
+                <label class="f"><span data-i="d.visa2">Box 2 title</span><input type="text" data-opt="visaTitles.1"></label>
+                <label class="f"><span data-i="d.visa3">Box 3 title</span><input type="text" data-opt="visaTitles.2"></label>
+              </fieldset>
+              <div class="row"><button type="button" class="btn small" id="dReset" data-i="d.reset">Restore defaults</button></div>
+            </form>
+            <div class="card previewcard">
+              <div class="card-h"><h3 data-i="btn.preview">Preview</h3>
+                <div class="row small"><button type="button" class="btn small" id="dPrev">‹</button><span id="dPage">1 / 1</span><button type="button" class="btn small" id="dNext">›</button></div></div>
+              <div class="sheet" id="dSheet"></div>
+              <div class="row"><button type="button" class="btn primary" id="dPrint" data-i="btn.print">Print</button><button type="button" class="btn" id="dPdf" data-i="btn.pdf">Save as PDF</button></div>
+            </div>
+          </div>
+        </section>
+        <section class="panel" data-panel="summary"></section>
+        <section class="panel" data-panel="export"></section>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Preview overlay -->
+<div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-label="Preview">
+  <div class="ov-bar">
+    <strong id="ovTitle"></strong>
+    <div class="spacer"></div>
+    <div class="seg small" id="ovLay"><button type="button" data-lay="classic" data-i="lay.classic">Original</button><button type="button" data-lay="modern" data-i="lay.modern">Modern</button><button type="button" data-lay="cards" data-i="lay.cards">Cards</button></div>
+    <label class="num rng"><span data-i="ex.range">Pages</span> <input type="text" id="ovRange" size="9" data-i-ph="ex.range.ph" placeholder="all"></label>
+    <button type="button" class="btn" id="ovJpg" data-i="ex.jpeg">JPEG</button>
+    <button type="button" class="btn primary" id="ovPrint" data-i="btn.print">Print</button>
+    <button type="button" class="btn" id="ovPdf" data-i="btn.pdf">Save as PDF</button>
+    <button type="button" class="btn" id="ovClose" data-i="btn.close">Close</button>
+  </div>
+  <div class="ov-pages" id="ovPages"></div>
+</div>
+
+<div id="printRoot" aria-hidden="true"></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<input type="file" id="fileInput" accept=".dfi,.dmj,.txt,.DFI,.DMJ,.TXT" multiple hidden>
+
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/samples.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/core.js"></script>
+<script src="js/draw.js"></script>
+<script src="js/report.js"></script>
+<script src="js/original.js"></script>
+<script src="js/original2.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/zip.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
