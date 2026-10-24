@@ -178,6 +178,8 @@
                   <label class="f"><span data-i="d.lug.lossQuad">Head loss per (l/min)&sup2; (bar)</span><input type="number" min="0" step="any" data-opt="o.lug.lossQuad"></label>
                   <label class="f"><span data-i="d.lug.minstage">Shortest stage when detected from pressure (s)</span><input type="number" min="5" step="1" data-opt="o.lug.minStage"></label></details>
                 <label class="f"><span data-i="d.density">Grout density for effective pressure (kg/m³)</span><input type="number" min="0" step="any" data-opt="o.density"></label>
+                <label class="f"><span data-i="d.angle">Hole angle from the vertical (degrees, for effective pressure)</span><input type="number" min="0" max="90" step="any" data-opt="o.angle"></label>
+                <label class="f"><span data-i="d.water">Ground water depth (m, 0 = none, for effective pressure)</span><input type="number" min="0" step="any" data-opt="o.waterDepth"></label>
               </fieldset>
               <fieldset><legend data-i="d.sections">Sections (Modern and Cards layouts)</legend>
                 <div class="grid2">
@@ -255,6 +257,7 @@
     <div class="seg small" id="ovLay"><button type="button" data-lay="classic" data-i="lay.classic">Original</button><button type="button" data-lay="modern" data-i="lay.modern">Modern</button><button type="button" data-lay="cards" data-i="lay.cards">Cards</button></div>
     <label class="num rng"><span data-i="ex.range">Pages</span> <input type="text" id="ovRange" size="9" data-i-ph="ex.range.ph" placeholder="all"></label>
     <button type="button" class="btn" id="ovJpg" data-i="ex.jpeg">JPEG</button>
+    <button type="button" class="btn" id="ovPng" data-i="ex.png">PNG</button>
     <button type="button" class="btn primary" id="ovPrint" data-i="btn.print">Print</button>
     <button type="button" class="btn" id="ovPdf" data-i="btn.pdf">Save as PDF</button>
     <button type="button" class="btn" id="ovClose" data-i="btn.close">Close</button>

@@ -154,3 +154,14 @@ test('manual axes: an empty (0) scale is automatic for that curve only; entered 
   assert.ok(pv(() => {}).includes('100'), 'P/V plot keeps the original 0-100 l axis by default');
   const fitted = pv((o) => { o.axes = 'auto'; }); assert.ok(!fitted.includes('100') && fitted.includes('5'), 'P/V plot axes fitted to the data: ' + fitted.filter((s) => /^\d/.test(s)).join(' '));
 });
+
+test('pressure/volume/flow with many deep sleeves: the diagram is compressed to stay inside the frame', () => {
+  const opt = options({ layout: 'classic' }); opt.o.dec = ','; opt.o.reports = { time: false, pvg: false, pvf: true };
+  const items = []; for (let i = 0; i < 12; i++) items.push(itemOf(loadSample(1), { job: 'H1', sleeve: String(i + 1), top: String(i * 5), bottom: String(i * 5 + 4) }));
+  const doc = recordDoc(); G.buildDocument(doc, items, opt, 'records');
+  const P = doc.page(0), t = texts(P).map((x) => x.s);
+  assert.ok(t.some((s) => /Number of grouted sleeve\(s\): 12/.test(s)), 'all twelve sleeves listed');
+  assert.ok(t.some((s) => /^1\/\d+$/.test(s) && s !== '1/100'), 'scale label follows the compression');
+  const maxY = Math.max(...P.ops.filter((o) => o.k === 'rect').map((o) => o.a[1] + o.a[3]));
+  assert.ok(maxY <= 203.5, 'nothing below the frame: ' + maxY);
+});

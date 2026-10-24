@@ -48,9 +48,10 @@ Disassembled with `tools/re/il-disassemble.ps1` (reflection-only, executes nothi
 
 So the raw formula matches one of the original's two tables exactly, and everything except the two mean pressures matches the export.
 
-### Open item: the +≈0.1 bar
-
-The original's exported mean pressures are higher by ≈0.10 bar (18-1) and ≈0.11 bar (18-2), end pressure is not. The database stores grout `Density = 1000` and `Top_level = Bottom_level = 1` (m), `Head_loss = 0`, `Water_depth = 0`; 1 m of 1000 kg/m³ grout is ≈0.098–0.1 bar. The original has an *Effective pressure* option and a hydrostatic-pressure option in its print dialogs. This points to an effective-pressure correction, but the offset is not identical for the two holes (≈0.1025 vs ≈0.109 after allowing for 0.1-bar sample rounding), so the exact formula is **not** reproduced and nothing was fitted. To close this: print/export one hole from the original with *Effective pressure* switched on and off, and record the density/level/inclination entered for it.
+### Resolved: the +≈0.1 bar is the effective pressure
+Found by reading the .NET IL of `DialogDesktop.dll` (`InfosRecords.Injection`), not the native code. `CalcPNormal(P)` converts an effective pressure back to a gauge pressure: `P - cosA * h * (density/1000) / 10 + cosA * (h - waterDepth) / 10` (bar, metres), with h = (top level + bottom level) / 2, `density` = grout density (default **1000** when not set) and the water term only when a ground-water depth is set and lies above h. The effective pressure is the inverse: **P + cosA*(rho/1000)*h/10 - cosA*(h - Hw)/10**. For the specimens (levels 1-1 m, 1000 kg/m3) that is exactly **+0.100 bar**, which agrees with both exported offsets (0.10 and 0.11) within the 0.01 rounding of the exports. The export adds it to the **average** and **30 s** pressure only; the **end** pressure stays raw. `Injection.GeValeursMoyennesFinales` itself is a plain mean (the head loss is subtracted only from the 30 s value there), and the DFI import writes raw values (`Average_pressure = round(mean/1e5, 2) - Head_loss`, with Head_loss 0 here).
+Head loss polynomial in the same class: `CalcHeadLoss(Q) = c0 + c1*Q + c2*Q^2` (Pa; `CalcHeadLossBar` = the same with Q in l/min (x1.6667e-5 per factor) divided by 1e5 and rounded to 2 decimals).
+The pressure unit setting `Unite Pression` maps 0 -> x1 (bar), 1 -> x1.01972 (kg/cm2), 2 -> x100 (kPa) in the export.
 
 ## Printouts: measured from real specimens
 
@@ -113,7 +114,7 @@ Static only; the program was never run. 1637 procedures, 10948 strings. Each CLI
 * **Pressure unit conversions** in the print code: bar to kPa x100, bar to kg/cm2 x1.0197163. Raw pressure on the legacy path is built from two bytes (`FUN_007103a0`: `(hi*256+lo)*scale`), i.e. the device protocol, not the DFI file.
 * **"Lugeon apparent final = x"** is only printed when the lugeon mode and the **Peffective** setting are both on (the registry value `Configuration\Peffective` is a boolean "show effective pressure"). The value printed is the last stage's record (field +0x20 of a 0x34-byte stage record, rounded to the configured decimals).
 * **GetValLugeon30, IsPalierLine, FindFirstPalierStart, IsLugeonRecord** only occur as VB6 error-handler strings ("Procedure X du module Y"): they have no direct cross-references, so their bodies were not isolated.
-* **Not found:** a hydrostatic term in the stage computation (the "Display hydrostatic pressure" option is a separate display setting), and the origin of the ~0.1 bar difference seen in the pressure averages. The only pressure correction that exists on this path is the head-loss subtraction above, which would lower, not raise, the pressure, so the gap is still unexplained.
+* **Not found in the native code:** a hydrostatic term in the stage computation. The ~0.1 bar difference in the pressure averages turned out to live in the .NET assembly (see "Resolved" above).
 
 ### Still open
 The remaining questions need a water-test printout plus its DFI file to check against.

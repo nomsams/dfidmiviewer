@@ -105,14 +105,16 @@
     P.text(t('o.pressure').replace('(bar)', '(' + O_.units().PU + ')'), M.L + 2, yT - 2.5, { size: 8.88, bold: true, c: opt.o.p.color }); P.text('Q (l/min)', M.R - 2, yT - 2.5, { size: 8.88, bold: true, align: 'right', c: opt.o.q.color });
     /* table of stages */
     const hasSet = w.stages.some((s) => isNum(s.setP));
-    const cols = [[t('o.lug.stage'), 16, 'left'], [t('o.lug.start'), 24, 'right'], [t('o.lug.dur'), 28, 'right']].concat(hasSet ? [[t('o.lug.set'), 30, 'right']] : [], [[t('o.lug.p'), 34, 'right'], [t('o.lug.q'), 34, 'right'], [t('o.lug.vol'), 28, 'right'], [t('o.lug.pq'), 30, 'right'], [t('o.lug.l'), hasSet ? 38 : 54, 'right']]);
+    const hasHy = opt.o.lug.staticM > 0, hydroBar = (opt.o.lug.staticM || 0) * 0.0981;
+    const cols = [[t('o.lug.stage'), 16, 'left'], [t('o.lug.start'), 24, 'right'], [t('o.lug.dur'), 28, 'right']].concat(hasSet ? [[t('o.lug.set'), 30, 'right']] : [], [[t('o.lug.p'), 34, 'right']], hasHy ? [[t('o.lug.hydro'), 40, 'right']] : [], [[t('o.lug.q'), 34, 'right'], [t('o.lug.vol'), 28, 'right'], [t('o.lug.pq'), 30, 'right'], [t('o.lug.l'), hasSet ? 38 : 54, 'right']]);
+    const sumW = cols.reduce((n, c) => n + c[1], 0); if (sumW > x1 - x0) cols.forEach((c) => { c[1] = c[1] * (x1 - x0) / sumW; }); // never wider than the chart
     const tw = cols.reduce((n, c) => n + c[1], 0), tx = x0, rh = 5.6, perPage = 11;
     const drawTable = (Q, y0, rows) => {
       Q.rect(tx, y0, tw, rh + 1, { stroke: '#000', w: GEO.thin, fill: '#ececec' });
       let x = tx; cols.forEach((c) => { Q.text(G.fit(c[0], c[1] - 2, 7.4, true), c[2] === 'right' ? x + c[1] - 1.2 : x + 1.2, y0 + rh - 0.6, { size: 7.4, bold: true, align: c[2] === 'right' ? 'right' : 'left' }); x += c[1]; });
       rows.forEach((s, i) => {
         const y = y0 + rh + 1 + i * rh; Q.rect(tx, y, tw, rh, { stroke: '#000', w: GEO.thin });
-        const cells = [String(s.n), G.fmtHMS(s.start).replace(/^00:/, ''), G.fmtHMS(s.dur).replace(/^00:/, '')].concat(hasSet ? [isNum(s.setP) ? dec(s.setP, 2) : '-'] : [], [dec(s.p, 2), dec(s.q, 2), dec(s.vol, 2), dec(s.pq, 2), isNum(s.lugeon) ? dec(s.lugeon, 1) : '-']);
+        const cells = [String(s.n), G.fmtHMS(s.start).replace(/^00:/, ''), G.fmtHMS(s.dur).replace(/^00:/, '')].concat(hasSet ? [isNum(s.setP) ? dec(s.setP, 2) : '-'] : [], [dec(s.p, 2)], hasHy ? [dec(hydroBar, 2)] : [], [dec(s.q, 2), dec(s.vol, 2), dec(s.pq, 2), isNum(s.lugeon) ? dec(s.lugeon, 1) : '-']);
         let xx = tx; cols.forEach((c, k) => { Q.text(cells[k], c[2] === 'right' ? xx + c[1] - 1.2 : xx + 1.2, y + rh - 1.5, { size: 8.4, align: c[2] === 'right' ? 'right' : 'left' }); xx += c[1]; });
       });
       return y0 + rh + 1 + rows.length * rh;

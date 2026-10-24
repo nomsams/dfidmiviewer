@@ -76,13 +76,21 @@
 
   /* Samples from the first record up to the last pump stop, plotted against the measuring clock. Time spent idle
      does not advance that clock, so pauses collapse onto one line, exactly as in the original printouts. */
+  /* Effective pressure, from DialogDesktop.Injection.CalcPNormal (its inverse): the gauge pressure plus the grout column above the middle of the
+     sleeve, minus the ground water above it: P + cosA*(rho/1000)*h/10 - cosA*(h - waterDepth)/10 (bar, metres). Angle is from the vertical. */
+  function effOffset(hdr, O) {
+    const top = G.parseNumber(hdr.top), bottom = G.parseNumber(hdr.bottom), h = isNum(top) && isNum(bottom) ? (top + bottom) / 2 : isNum(bottom) ? bottom : 0;
+    if (!(h > 0)) return 0;
+    const cosA = Math.cos((O.angle || 0) * Math.PI / 180), wd = O.waterDepth || 0, grout = cosA * h * ((O.density || 1000) / 1000), water = wd !== 0 && wd < h ? cosA * (h - wd) : 0;
+    return (grout - water) / 10;
+  }
   function prepare(item, opt) {
     const S = item.rec.samples; if (!S.length) return null;
     let end = S.length - 1;
     for (let i = item.rec.events.length - 1; i >= 0; i--) if (item.rec.events[i].name === 'PumpStop') { end = Math.min(S.length - 1, Math.max(0, item.rec.events[i].idx)); break; }
     const idx = []; for (let i = 0; i <= end; i++) idx.push(i);
     const pts = idx.map((i) => S[i]), t0 = 0, T = pts.map((s) => s.tm), O = opt.o;
-    const bottom = G.parseNumber(item.hdr.bottom), corr = O.sel.eff && isNum(bottom) ? (O.density * 9.81 * bottom) / 1e5 : 0;
+    const corr = O.sel.eff ? effOffset(item.hdr, O) : 0;
     const P = pts.map((s) => s.pBar + corr), Q = pts.map((s) => s.qLmin), V = pts.map((s) => s.vL);
     const sp = O.smoothP.on ? movingAverage(T, P, O.smoothP.s) : P, sq = O.smoothQ.on ? movingAverage(T, Q, O.smoothQ.s) : Q;
     const D = sp.map((p, i) => (p > 0.05 ? sq[i] / p : 0)), spu = UF === 1 ? sp : sp.map((v) => v * UF), Gn = spu.map((p, i) => p * V[i]);
@@ -165,7 +173,7 @@
       if (O.sel.duration) put(G.fmtHMS(st.durMeas));
       if (O.sel.totalVol) put(dec(Math.round(d.vMax), ACC) + ' l');
       if (O.sel.volLimit) { const sp = G.setpoints(item.rec.meta.setConsRaw); if (sp.volumeLimitL != null) put('(' + trim(sp.volumeLimitL, 0) + ')', '#ff0000'); }
-      if (O.sel.avgPQ) put(dec(st.avgP * UF, ACC) + ' ' + PU + ' ' + dec(st.avgQ, ACC) + ' l/min');
+      if (O.sel.avgPQ) put(dec((st.avgP + d.corr) * UF, ACC) + ' ' + PU + ' ' + dec(st.avgQ, ACC) + ' l/min');
       if (O.sel.finalP) put(dec(st.endP * UF, ACC) + ' ' + PU);
       if (O.sel.groutType) { const g = hdr.grout || t('o.unknown'); const wd = G.textWidth(g, 6.72); P.text(g, cx + w - wd - 0.6, base, { size: 6.72 }); }
     }
@@ -221,14 +229,16 @@
     const O = opt.o, m = GEO.pv, P = doc.addPage(GEO.page.w, GEO.page.h); P.orig = true; P.label = '';
     const first = group[0].item, hdr0 = first.hdr;
     pageHead(P, opt, hdr0, t('o.rep.pvf'), m, first);
-    P.text('1/100', m.L - 0.01, 28.79, { size: 8.88, c: '#f0f0f0' });
     const name = (O.boreholeLabel || t('o.borehole')) + ' ' + (hdr0.job || first.rec.meta.fileName), wb = G.textWidth(name, 11.88, true);
     P.text(name, (m.L + m.R) / 2 - wb / 2 - 0.2, 31.83, { size: 11.88, bold: true });
     P.text(t('o.depth'), 0, 43.18, { size: 5.88 });
     const rows = group.map((e, i) => { const dep = G.parseNumber(e.item.hdr.bottom); return { e, depth: isNum(dep) ? dep : (G.parseNumber(e.item.hdr.sleeve) || i + 1), top: G.parseNumber(e.item.hdr.top) }; }).sort((a, b) => a.depth - b.depth);
     const dMin = rows[0].depth, dMax = rows[rows.length - 1].depth, y0 = 46.02, plotW = 87.0, xs = [m.L, 104.01, 201.0];
+    /* 1 m = 10 mm (1/100) as in the specimen; a deeper range is compressed so that the table below still fits the frame */
+    const sc = Math.min(10, (GEO.frameBottom - y0 - 6.26 - 6.9 - 2) / Math.max(dMax - dMin, 0.001));
+    P.text('1/' + Math.round(1000 / sc), m.L - 0.01, 28.79, { size: 8.88, c: '#f0f0f0' });
     const charts = [
-      { title: t('o.avgP'), unit: '(' + PU + ')', get: (r) => r.e.st.avgP * UF, color: O.p.color, want: 10 },
+      { title: t('o.avgP'), unit: '(' + PU + ')', get: (r) => (r.e.st.avgP + (O.sel.eff ? effOffset(r.e.item.hdr, O) : 0)) * UF, color: O.p.color, want: 10 },
       { title: t('o.cumVol'), unit: '(l)', get: (r) => r.e.st.vol, color: O.d.color, want: 10 },
       { title: t('o.avgQ'), unit: '(l/min)', get: (r) => r.e.st.avgQ, color: O.q.color, want: 10, noLabel: true },
     ];
@@ -237,14 +247,14 @@
       P.text(c.title, cx, 39.58, { size: 7.44, align: 'center' }); P.text(c.unit, cx, 42.5, { size: 7.44, align: 'center' });
       for (let k = 0; k <= 4; k++) { const x = x0 + plotW * k / 4; P.text(trim(mx * k / 4, 2), x, 45.47, { size: 6.72, align: 'center' }); P.line(x, 45.72, x, y0, { c: '#000', w: k === 0 || k === 4 ? 0.25 : 0.13 }); }
       rows.forEach((r) => {
-        const y = y0 + (r.depth - dMin) * 10, v = c.get(r), hBar = isNum(r.top) ? Math.max(0, (r.depth - r.top) * 10) : 0;
+        const y = y0 + (r.depth - dMin) * sc, v = c.get(r), hBar = isNum(r.top) ? Math.max(0, (r.depth - r.top) * sc) : 0;
         P.line(x0 - 0.42, y, x0, y, { c: '#000', w: 0.25 });
         P.text(dec(r.depth, 2), x0 - 5.07, y + 0.8, { size: 6.72 });
         if (isNum(v) && v > 0 && hBar > 0) P.rect(x0, y - hBar, Math.min(plotW, v / mx * plotW), hBar, { fill: c.color });
         if (!c.noLabel) { P.text(dec(v, ACC), x0 + plotW - 2.7, y + 0.6, { size: 5.16, align: 'center' }); P.text('(*)', x0 + plotW - 2.7, y - 1.4, { size: 5.16, align: 'center' }); }
       });
     });
-    const yT = y0 + (dMax - dMin) * 10 + 6.26, totVol = rows.reduce((n, r) => n + (r.e.st.vol || 0), 0);
+    const yT = y0 + (dMax - dMin) * sc + 6.26, totVol = rows.reduce((n, r) => n + (r.e.st.vol || 0), 0);
     P.rect(m.L, yT, m.R - m.L, 3.43, { stroke: '#000', w: GEO.thin }); P.rect(m.L, yT + 3.47, m.R - m.L, 3.43, { stroke: '#000', w: GEO.thin });
     P.text(' ' + t('o.cumVolGr'), m.L, yT + 2.8, { size: 8.88 }); P.text(': ' + trim(totVol, 0) + ' l', 52.5, yT + 2.8, { size: 8.88 });
     P.text(t('o.nSleeves') + ': ' + rows.length + ' ', m.R, yT + 2.8, { size: 8.88, align: 'right' });
@@ -255,7 +265,7 @@
 
   /* ---------- entry point ---------- */
   /* helpers shared with js/original2.js (histogram and water-test reports) */
-  G._o = { GEO, pageHead, prepare, dec, trim, sleeveText, niceStep, tightMax, stopLabel, extras: {}, units: () => ({ UF, PU, ACC }) };
+  G._o = { GEO, pageHead, prepare, effOffset, dec, trim, sleeveText, niceStep, tightMax, stopLabel, extras: {}, units: () => ({ UF, PU, ACC }) };
 
   G.buildOriginal = function (doc, items, opt) {
     const O = opt.o; DEC = O.dec === '.' || O.dec === ',' ? O.dec : (G.lang === 'en' ? '.' : ',');

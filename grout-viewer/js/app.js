@@ -46,7 +46,7 @@
     const o = {}; for (const k of Object.keys(e.ov)) if (e.ov[k] && e.ov[k].trim()) o[k] = e.ov[k];
     if (S.opt.company && !o.company) o.company = S.opt.company; return o;
   }
-  const itemOf = (e) => ({ rec: e.rec, st: G.stats(e.rec, S.opt.method), hdr: G.header(e.rec, ovOf(e)), comment: e.comment });
+  const itemOf = (e) => { const hdr = G.header(e.rec, ovOf(e)), O = S.opt.o; return { rec: e.rec, st: G.stats(e.rec, S.opt.method), hdr, comment: e.comment, eff: O.sel.eff ? { off: G._o.effOffset(hdr, O), waterDepth: O.waterDepth, angle: O.angle } : null }; };
   const label = (e) => G.header(e.rec, ovOf(e)).job || e.rec.meta.fileName;
   const isUpdate = (e) => e && e.rec.meta.kind === 'update';
 
@@ -384,7 +384,7 @@
 
   function pExport(e) {
     const list = S.entries.filter((x) => !isUpdate(x)), dis = list.length ? '' : ' disabled';
-    panel('export').innerHTML = '<div class="cmp"><div class="card"><h3>' + esc(t('ex.this')) + '</h3><br><div class="row"><button class="btn" id="xCsv">' + esc(t('btn.csv')) + '</button><button class="btn" id="xPdf">' + esc(t('btn.pdf')) + '</button><button class="btn" id="xPdfM">' + esc(t('btn.pdfmodern')) + '</button><button class="btn" id="xPdfC">' + esc(t('btn.pdfclassic')) + '</button><button class="btn" id="xJpg">' + esc(t('ex.jpeg')) + '</button></div></div>' +
+    panel('export').innerHTML = '<div class="cmp"><div class="card"><h3>' + esc(t('ex.this')) + '</h3><br><div class="row"><button class="btn" id="xCsv">' + esc(t('btn.csv')) + '</button><button class="btn" id="xPdf">' + esc(t('btn.pdf')) + '</button><button class="btn" id="xPdfM">' + esc(t('btn.pdfmodern')) + '</button><button class="btn" id="xPdfC">' + esc(t('btn.pdfclassic')) + '</button><button class="btn" id="xJpg">' + esc(t('ex.jpeg')) + '</button><button class="btn" id="xPng">' + esc(t('ex.png')) + '</button></div></div>' +
       '<div class="card"><h3>' + esc(t('ex.all')) + '</h3><br><div class="row"><button class="btn" id="xAllPdf"' + dis + '>' + esc(t('btn.allpdf')) + '</button><button class="btn" id="xZipPdf"' + dis + '>' + esc(t('ex.zip')) + '</button><button class="btn" id="xSumPdf"' + dis + '>' + esc(t('btn.sumpdf')) + '</button><button class="btn" id="xBoth"' + dis + '>' + esc(t('btn.bothpdf')) + '</button><button class="btn" id="xBilan"' + dis + '>' + esc(t('btn.bilancsv')) + '</button><button class="btn" id="xJpgAll"' + dis + '>' + esc(t('ex.jpegall')) + '</button></div></div>' +
       '<div class="card"><h3>' + esc(t('ex.options')) + '</h3><br><label class="f"><span>' + esc(t('ex.range')) + '</span><input type="text" id="xRange" value="' + esc(S.pageRange) + '" placeholder="' + esc(t('ex.range.ph')) + '"></label>' +
       '<label class="f"><span>' + esc(t('ex.dpi')) + '</span><select id="xDpi"><option value="150">150 dpi</option><option value="300" selected>300 dpi</option><option value="600">600 dpi</option></select></label><p class="fine">' + esc(t('ex.hint')) + '</p></div></div>';
@@ -397,7 +397,7 @@
       if (id === 'xAllPdf') savePdf('records', list); if (id === 'xSumPdf') savePdf('summary', list); if (id === 'xZipPdf') exportZipPdfs(list);
       if (id === 'xBoth') { const d = build(G.pdfDoc(), 'both', list); d.save('grout-reports-and-summary.pdf'); }
       if (id === 'xBilan') download('bilan.csv', G.bilanCsv(G.selectItems(list.map(itemOf), S.opt.mc)), 'text/csv');
-      if (id === 'xJpg') exportJpegZip('records', [e], dpi); if (id === 'xJpgAll') exportJpegZip('records', list, dpi);
+      if (id === 'xPng') exportJpegZip('records', [e], dpi, undefined, 'png'); if (id === 'xJpg') exportJpegZip('records', [e], dpi); if (id === 'xJpgAll') exportJpegZip('records', list, dpi);
     };
   }
 
@@ -417,7 +417,8 @@
   }
   const loadImage = (url) => new Promise((resolve, reject) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = () => reject(new Error('image')); im.src = url; });
   /* every page as a JPEG (quality 75, like the original's 300 dpi JPEG output), all in one ZIP */
-  async function exportJpegZip(kind, entries, dpi, layout) {
+  async function exportJpegZip(kind, entries, dpi, layout, fmt) {
+    const png = fmt === 'png';
     try {
       const d = build(G.svgDoc(), kind, entries, layout), sel = parseRange(S.pageRange, d.count());
       if (sel === 'bad') { toast(t('err.range')); return; }
@@ -427,11 +428,11 @@
         try {
           const img = await loadImage(url), c = document.createElement('canvas'); c.width = w; c.height = h;
           const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.drawImage(img, 0, 0, w, h);
-          const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.75)); if (!blob) throw new Error('jpeg');
-          files.push({ name: base + '-' + String(i + 1).padStart(2, '0') + '.jpg', data: new Uint8Array(await readFile(blob)) });
+          const blob = await new Promise((r) => png ? c.toBlob(r, 'image/png') : c.toBlob(r, 'image/jpeg', 0.75)); if (!blob) throw new Error('jpeg');
+          files.push({ name: base + '-' + String(i + 1).padStart(2, '0') + (png ? '.png' : '.jpg'), data: new Uint8Array(await readFile(blob)) });
         } finally { URL.revokeObjectURL(url); }
       }
-      downloadBlob(base + '-jpeg.zip', new Blob([G.zip(files)], { type: 'application/zip' })); toast(t('toast.zip'));
+      downloadBlob(base + (png ? '-png.zip' : '-jpeg.zip'), new Blob([G.zip(files)], { type: 'application/zip' })); toast(t('toast.zip'));
     } catch (e) { console.error(e); toast(t('err.jpeg')); }
   }
 
@@ -493,6 +494,7 @@
     /* overlay */
     $('#ovClose').onclick = closePreview;
     $('#ovRange').oninput = (ev) => { S.pageRange = ev.target.value; };
+    $('#ovPng').onclick = () => { const o = S.ov; if (o) exportJpegZip(o.kind, o.entries, 300, o.layout, 'png'); };
     $('#ovJpg').onclick = () => { const o = S.ov; if (o) exportJpegZip(o.kind, o.entries, 300, o.layout); };
     $('#ovPrint').onclick = () => { const o = S.ov; if (o) printDoc(o.kind, o.entries, o.layout); };
     $('#ovPdf').onclick = () => { const o = S.ov; if (o) savePdf(o.kind, o.entries, o.layout); };

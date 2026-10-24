@@ -49,8 +49,12 @@ test('water test and volume distribution reports build, show the stages and tota
   const doc = recordDoc(); G.buildDocument(doc, [itemOf(waterTest(false), { top: '2', bottom: '7' }), itemOf(loadSample(0)), itemOf(loadSample(1))], opt, 'records');
   const txt = (p) => p.ops.filter((o) => o.k === 'text').map((o) => o.a[0]).join('|');
   assert.ok(doc.count() >= 3);
-  const lug = doc.pages.find((p) => txt(p).includes('Water test diagram (Lugeon)') && txt(p).includes('Stage N#'));
+  const lug = doc.pages.find((p) => txt(p).includes('Water test diagram') && txt(p).includes('Stage N#'));
   assert.ok(lug, 'water test page'); assert.match(txt(lug), /Number of stages: 3/); assert.match(txt(lug), /Lugeon apparent final: 8\.0/);
+  assert.ok(!/Hydrostatic pressure/.test(txt(lug)), 'no hydrostatic column without a static water level');
+  const opt2 = options({ layout: 'classic' }); opt2.o.dec = '.'; opt2.o.reports = { time: false, pvg: false, pvf: false, hist: false, lug: true }; opt2.o.lug.staticM = 10;
+  const doc2 = recordDoc(); G.buildDocument(doc2, [itemOf(waterTest(false), { top: '2', bottom: '7' })], opt2, 'records');
+  assert.ok(doc2.pages.some((p) => txt(p).includes('Hydrostatic pressure|') && txt(p).includes('0.98')), 'hydrostatic column (10 m of water = 0.98 bar)');
   const hist = doc.pages.find((p) => txt(p).includes('Distribution of the grouted volumes') && txt(p).includes('Number of injections'));
   assert.ok(hist, 'histogram page'); assert.match(txt(hist), /Injections: 3/);
   const none = recordDoc(); G.buildDocument(none, [itemOf(loadSample(1))], opt, 'records');
@@ -135,4 +139,28 @@ test('header keys of the original import (top depth, bottom depth, stagenumber, 
   assert.equal(G.header(rec, { top: '9' }).top, '9', 'the user can still override');
   const opt = options({ layout: 'classic' }); opt.o.dec = ','; const doc = recordDoc(); G.buildDocument(doc, [itemOf(rec)], opt, 'records');
   assert.ok(doc.page(0).ops.some((q) => q.k === 'text' && q.a[0] === ' 7 (2,5-3 m)'), 'sleeve and levels shown like the original ("1 (1-1 m)"), zeros trimmed');
+});
+
+test('effective pressure follows the original (CalcPNormal inverted): grout column over the sleeve middle, angle and ground water', () => {
+  const O = G._o, o = { density: 1000, angle: 0, waterDepth: 0 };
+  assert.ok(Math.abs(O.effOffset({ top: '1', bottom: '1' }, o) - 0.1) < 1e-9, '1 m of 1000 kg/m3 = 0.1 bar (the offset seen in the original exports)');
+  assert.ok(Math.abs(O.effOffset({ top: '2', bottom: '4' }, o) - 0.3) < 1e-9, 'middle of the sleeve: (2+4)/2 = 3 m');
+  assert.ok(Math.abs(O.effOffset({ top: '2', bottom: '4' }, { density: 1500, angle: 0, waterDepth: 0 }) - 0.45) < 1e-9, 'density scales the column');
+  assert.ok(Math.abs(O.effOffset({ top: '2', bottom: '4' }, { density: 1000, angle: 60, waterDepth: 0 }) - 0.15) < 1e-9, 'inclined hole: cos(angle)');
+  assert.ok(Math.abs(O.effOffset({ top: '2', bottom: '4' }, { density: 1000, angle: 0, waterDepth: 1 }) - 0.1) < 1e-9, 'ground water above the middle subtracts (3-1)/10');
+  assert.equal(O.effOffset({}, o), 0, 'no levels: no correction');
+  const opt = options({ layout: 'classic' }); opt.o.dec = '.'; opt.o.reports = { time: false, pvg: false, pvf: true }; opt.o.sel.eff = true;
+  const doc = recordDoc(); G.buildDocument(doc, [itemOf(loadSample(1), { sleeve: '1', top: '1', bottom: '1' })], opt, 'records');
+  const raw = G.stats(loadSample(1), 'original').avgP;
+  assert.ok(doc.page(0).ops.some((x) => x.k === 'text' && x.a[0] === (raw + 0.1).toFixed(2).replace(/0$/, '').replace(/\.$/, '') || x.a[0] === (raw + 0.1).toFixed(1)), 'the depth diagram shows the effective average pressure');
+});
+
+test('bilan export: levels are filled and the effective pressure shifts the two mean pressures only (end pressure stays raw, as in the original export)', () => {
+  const rec = loadSample(1), a = itemOf(rec, { job: 'H1', sleeve: '1', top: '1', bottom: '1' }), b = Object.assign({}, a, { eff: { off: 0.1 } });
+  const col = (it, name) => { const lines = G.bilanCsv([it]).split('\n'), head = lines[0].split(';'); return lines[1].split(';')[head.indexOf(name)]; };
+  const num = (s) => parseFloat(String(s).replace(',', '.'));
+  assert.ok(Math.abs(num(col(b, 'Average_pressure')) - num(col(a, 'Average_pressure')) - 0.1) < 0.011, 'average pressure +0.1');
+  assert.ok(Math.abs(num(col(b, '30s_pressure')) - num(col(a, '30s_pressure')) - 0.1) < 0.011, '30 s pressure +0.1');
+  assert.equal(col(b, 'End_pressure'), col(a, 'End_pressure'));
+  assert.equal(col(a, 'Top_level'), '1'); assert.equal(col(a, 'Bottom_level'), '1');
 });

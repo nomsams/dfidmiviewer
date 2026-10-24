@@ -364,16 +364,17 @@
   const BILAN_COLUMNS = ['Start_date', 'Borehole', 'Fan', 'Sleeve', 'Regrout', 'Grout', 'Zone', 'X_coord', 'Y_coord', 'Pump', 'Start_time', 'End_time',
     'Total_duration', 'Grouting_duration', 'Top_level', 'Bottom_level', 'Injected_volume', 'Average_pressure', '30s_pressure', 'End_pressure',
     'Average_flowrate', '30s_flowrate', 'End_flowrate', 'Stop_type', 'Dry_weights', 'Coeff_Headloss', 'Head_loss', 'Water_depth', 'Inclination'];
-  function bilanRow(rec, st, hdr) {
+  function bilanRow(rec, st, hdr, eff) {
+    eff = eff || {}; const off = eff.off || 0, top = parseNumber(hdr.top), bot = parseNumber(hdr.bottom);
     const rs = (rec.events.find((e) => e.name === 'RecordStart') || {}).date || '', re = ([...rec.events].reverse().find((e) => e.name === 'RecordStop') || {}).date || '';
     /* the original export prints at most d decimals with trailing zeros removed and a decimal comma */
     const r1 = (n, d) => (Number.isFinite(n) ? String(Math.round(n * Math.pow(10, d)) / Math.pow(10, d)).replace('.', ',') : '');
     const row = {
       Start_date: rs.slice(0, 10), Borehole: hdr.job, Fan: '', Sleeve: hdr.sleeve, Regrout: '', Grout: hdr.grout, Zone: hdr.zone, X_coord: '', Y_coord: '',
       Pump: hdr.pump, Start_time: rs.slice(11, 19), End_time: re.slice(11, 19), Total_duration: fmtHMS(st.durTotal), Grouting_duration: fmtHMS(st.durMeas),
-      Top_level: '', Bottom_level: '', Injected_volume: r1(st.vol, 0), Average_pressure: r1(st.avgP, 2), '30s_pressure': r1(st.p30, 2),
+      Top_level: r1(top, 2), Bottom_level: r1(bot, 2), Injected_volume: r1(st.vol, 0), Average_pressure: r1(st.avgP + off, 2), '30s_pressure': r1(st.p30 + off, 2),
       End_pressure: r1(st.endP, 2), Average_flowrate: r1(st.avgQ, 2), '30s_flowrate': r1(st.q30, 2), End_flowrate: r1(st.endQ, 2),
-      Stop_type: st.stopType, Dry_weights: '', Coeff_Headloss: '', Head_loss: '', Water_depth: '', Inclination: '',
+      Stop_type: st.stopType, Dry_weights: '', Coeff_Headloss: '', Head_loss: '', Water_depth: eff.waterDepth ? r1(eff.waterDepth, 2) : '', Inclination: eff.angle ? r1(eff.angle, 1) : '',
     };
     return row;
   }
@@ -388,7 +389,7 @@
   }
   function bilanCsv(items) {
     const rows = [BILAN_COLUMNS.join(';')];
-    items.forEach((it) => rows.push(BILAN_COLUMNS.map((c) => csvEscape(bilanRow(it.rec, it.st, it.hdr)[c])).join(';')));
+    items.forEach((it) => rows.push(BILAN_COLUMNS.map((c) => csvEscape(bilanRow(it.rec, it.st, it.hdr, it.eff)[c])).join(';')));
     return '﻿' + rows.join('\r\n');
   }
 
