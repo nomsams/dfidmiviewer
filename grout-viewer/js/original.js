@@ -107,7 +107,8 @@
     const soft = firstItem && firstItem.rec.meta.softVersion ? firstItem.rec.meta.softVersion : 'DPV';
     P.text((O.appTag || 'DLGPVD  6.61') + '/' + soft, R, 27.56, { size: 8.16, c: H.grey, align: 'right' });
   }
-  function levelsText(hdr) { const a = (hdr.top || '').trim(), b = (hdr.bottom || '').trim(); return a || b ? ' (' + (a || b) + '-' + (b || a) + ' m)' : ''; }
+  const lvl = (s) => { const n = G.parseNumber(s); return isNum(n) ? String(+n.toFixed(2)).replace('.', sep()) : String(s || '').trim(); };
+  function levelsText(hdr) { const a = lvl(hdr.top), b = lvl(hdr.bottom); return a || b ? ' (' + (a || b) + '-' + (b || a) + ' m)' : ''; }
   function sleeveText(hdr) { return ' ' + (hdr.sleeve || '1') + levelsText(hdr); }
 
   /* ---------- report 1: pressure and flow in accordance to time ---------- */
@@ -166,7 +167,7 @@
       if (O.sel.volLimit) { const sp = G.setpoints(item.rec.meta.setConsRaw); if (sp.volumeLimitL != null) put('(' + trim(sp.volumeLimitL, 0) + ')', '#ff0000'); }
       if (O.sel.avgPQ) put(dec(st.avgP * UF, ACC) + ' ' + PU + ' ' + dec(st.avgQ, ACC) + ' l/min');
       if (O.sel.finalP) put(dec(st.endP * UF, ACC) + ' ' + PU);
-      if (O.sel.groutType) { const g = hdr.grout || t('o.unknown'); const wd = G.textWidth(g, 6.72); P.text(g, cx + w - wd, base, { size: 6.72 }); }
+      if (O.sel.groutType) { const g = hdr.grout || t('o.unknown'); const wd = G.textWidth(g, 6.72); P.text(g, cx + w - wd - 0.6, base, { size: 6.72 }); }
     }
   }
 

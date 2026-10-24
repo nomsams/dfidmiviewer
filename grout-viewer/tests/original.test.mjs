@@ -38,7 +38,7 @@ test('time report: page, frame, columns and header match the printout', () => {
 
 test('time report: every text of the printout is reproduced at its position', () => {
   const got = texts(build({ time: true }).page(0)), sp = spec('time');
-  const skip = (t) => t.t.trim() === '' || /^\(Contract/.test(t.t) || t.t === 'Unknow'; // contract falls back to today's date; "Unknow" is clipped in the original
+  const skip = (t) => t.t.trim() === '' || /^\(Contract/.test(t.t); // the contract falls back to today's date; everything else, including the original's literal "Unknow", must match
   let checked = 0;
   for (const t of sp.texts.filter((x) => !skip(x))) {
     const m = got.filter((g) => g.s === t.t || g.s.trim() === t.t.trim()).sort((a, b) => Math.abs(a.y - t.y) - Math.abs(b.y - t.y))[0];
@@ -50,7 +50,7 @@ test('time report: every text of the printout is reproduced at its position', ()
     checked++;
   }
   assert.ok(checked >= 18, 'checked ' + checked + ' texts');
-  assert.ok(got.some((g) => g.s === 'Unknown' && g.c === '#000000'), 'grout type "Unknown" shown in full');
+  assert.ok(got.some((g) => g.s === 'Unknow'), 'the original prints the literal default "Unknow" for an unnamed grout');
 });
 
 test('time report: grid, ticks and plot height match', () => {

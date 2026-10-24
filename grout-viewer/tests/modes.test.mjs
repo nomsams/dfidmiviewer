@@ -39,6 +39,8 @@ test('water test: stages are found from pressure plateaus and from LugeonStart/S
   }
   const wl = G.waterTest(waterTest(false), { top: '2', bottom: '7' }, { staticM: 10, lossBar: 0.5 });
   assert.ok(Math.abs(wl.stages[0].lugeon - (6 / 5) * (10 / (2 + 0.981 - 0.5))) < 0.01, 'static water level and head loss enter the effective pressure');
+  const wp = G.waterTest(waterTest(false), { top: '2', bottom: '7' }, { lossBar: 0.1, lossLin: 0.01, lossQuad: 0.001 }), q0 = wp.stages[0].q;
+  assert.ok(Math.abs(wp.stages[0].lugeon - (q0 / 5) * (10 / (wp.stages[0].p - (0.1 + 0.01 * q0 + 0.001 * q0 * q0)))) < 0.01, 'head loss is c0 + c1*Q + c2*Q^2 of the stage flow, as in the original');
   assert.ok(Number.isNaN(G.waterTest(waterTest(false), {}, {}).stages[0].lugeon), 'no tested length: Lugeon is not invented');
 });
 
@@ -93,4 +95,44 @@ test('page selection syntax', () => {
   assert.equal(r('', 5), null); assert.equal(r('all', 5), null); assert.deepEqual(r('2-4', 9), [1, 2, 3]); assert.deepEqual(r('1, 3;5-6', 9), [0, 2, 4, 5]);
   assert.deepEqual(r('4-2', 9), [1, 2, 3], 'reversed range'); assert.deepEqual(r('2-99', 4), [1, 2, 3], 'clipped to the page count');
   assert.equal(r('abc', 5), 'bad'); assert.equal(r('7-9', 3), 'bad', 'nothing left after clipping'); assert.equal(r('0', 3), 'bad');
+});
+
+/* ---- facts decoded from the original's managed code (Jlsa.Foundation.LugeonStage, DXdataPVD) ---- */
+test('water test uses the stage figures the device writes in LugeonStart/LugeonStop (SI units), and ignores implausible ones', () => {
+  const build = (startData, stopData) => {
+    const rec = waterTest(true);
+    rec.events.forEach((e) => { if (e.name === 'LugeonStart') e.data = startData(e); if (e.name === 'LugeonStop') e.data = stopData(e); });
+    return rec;
+  };
+  let n = 0, m = 0; const sp = [2e5, 4e5, 6e5], vols = [0.006, 0.014, 0.024];
+  const rec = build((e) => (n++, `${n};${sp[n - 1]};60`), (e) => (m++, `${m};${sp[m - 1] * 1.0};60;${vols[m - 1]}`));
+  const w = G.waterTest(rec, { top: '2', bottom: '7' }, {});
+  assert.deepEqual(w.stages.map((s) => s.n), [1, 2, 3]);
+  assert.deepEqual(w.stages.map((s) => +s.setP.toFixed(2)), [2, 4, 6], 'set pressure from LugeonStart');
+  assert.ok(w.stages.every((s) => s.device), 'the device figures agree with the samples and are used');
+  assert.ok(Math.abs(w.stages[1].vol - 14) < 0.01 && Math.abs(w.stages[1].p - 4) < 0.01 && Math.abs(w.stages[1].dur - 60) < 0.01);
+  /* units other than SI are recognised when they agree with the samples (bar, litres) ... */
+  let a = 0, b = 0; const alt = build(() => (a++, `${a};${[2, 4, 6][a - 1]};60`), () => (b++, `${b};${[2, 4, 6][b - 1]};60;${[6, 14, 24][b - 1]}`));
+  assert.ok(G.waterTest(alt, { top: '2', bottom: '7' }, {}).stages.every((s) => s.device && Math.abs(s.lugeon - [6, 7, 8][s.n - 1]) < 0.02));
+  /* ... and nonsense falls back to the samples instead of being printed */
+  const bad = G.waterTest(build(() => '1;abc;x', () => '1;9999999;7;123'), { top: '2', bottom: '7' }, {});
+  assert.ok(bad.stages.every((s) => !s.device) && Math.abs(bad.stages[0].p - 2) < 0.01, 'sample values used');
+});
+
+test('header keys of the original import (top depth, bottom depth, stagenumber, headloss, fan, method) fill the report header', () => {
+  const txt = 'RecordStart\t\t2026-01-01T10:00:00.000\n\t\t000D0080\t000F0080\t93000780\t93000540\t93000500\n\t\ts\ts\tPa\tm3/s\tm3\n\t\t0\t0\t100000\t0\t0\n';
+  const xml = '<Xml><Config name="Top Depth" data="2.50"/><Config name="bottom depth" data="3.000"/><Config name="StageNumber" data="7"/><Config name="Fan" data="F2"/><Config name="headloss" data="0.2"/><Config name="Grout Name" data="CEM-A"/></Xml>';
+  const files = { 'a/REC.TXT': txt, 'a/REC.XML': xml };
+  const enc = new TextEncoder(); const blocks = [];
+  for (const [name, data] of Object.entries(files)) {
+    const body = enc.encode(data), h = new Uint8Array(512), put = (s, o) => { for (let i = 0; i < s.length; i++) h[o + i] = s.charCodeAt(i); };
+    put(name, 0); put('0000644\0', 100); put('0000000\0', 108); put('0000000\0', 116); put(body.length.toString(8).padStart(11, '0') + '\0', 124); put('00000000000\0', 136); put('        ', 148); h[156] = 48; put('ustar\0', 257); put('00', 263);
+    let sum = 0; for (const x of h) sum += x; put(sum.toString(8).padStart(6, '0') + '\0 ', 148); blocks.push(h, body, new Uint8Array((512 - (body.length % 512)) % 512));
+  }
+  blocks.push(new Uint8Array(1024)); const out = new Uint8Array(blocks.reduce((k, x) => k + x.length, 0)); let o = 0; blocks.forEach((x) => { out.set(x, o); o += x.length; });
+  const rec = G.parseBuffer('a.DFI', out.buffer), hdr = G.header(rec, {});
+  assert.equal(hdr.top, '2.50'); assert.equal(hdr.bottom, '3.000'); assert.equal(hdr.sleeve, '7'); assert.equal(hdr.fan, 'F2'); assert.equal(rec.meta.headLoss, '0.2'); assert.equal(hdr.grout, 'CEM-A');
+  assert.equal(G.header(rec, { top: '9' }).top, '9', 'the user can still override');
+  const opt = options({ layout: 'classic' }); opt.o.dec = ','; const doc = recordDoc(); G.buildDocument(doc, [itemOf(rec)], opt, 'records');
+  assert.ok(doc.page(0).ops.some((q) => q.k === 'text' && q.a[0] === ' 7 (2,5-3 m)'), 'sleeve and levels shown like the original ("1 (1-1 m)"), zeros trimmed');
 });

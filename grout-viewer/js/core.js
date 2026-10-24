@@ -193,7 +193,7 @@
     const meta = {
       fileName: name, kind: 'unknown', source: 'none', softVersion: '', jobSite: '', contract: '', jobName: '', jobNumber: '',
       operator: '', groutName: '', params: {}, setConsRaw: '', ginRaw: '', trig: '', trigStep: NaN, channels: [], units: [],
-      infoProc: '', size: buffer.byteLength,
+      infoProc: '', topDepth: '', bottomDepth: '', stageNumber: '', headLoss: '', fan: '', method: '', size: buffer.byteLength,
     };
     const rec = { meta, samples: [], events: [], warnings: [], id: Math.random().toString(36).slice(2) };
 
@@ -248,6 +248,8 @@
     const t = (v) => String(v || '').trim();
     meta.jobSite = t(configs.JobSite || meta.params.N_S); meta.jobName = t(configs.JobName || meta.params.N_I);
     meta.contract = t(configs.Contract || meta.params.M_T); meta.jobNumber = t(configs.JobNumber);
+    const cfg = (k) => { for (const key in configs) if (key.toLowerCase() === k) return String(configs[key] || '').trim(); return ''; };
+    meta.topDepth = cfg('top depth'); meta.bottomDepth = cfg('bottom depth'); meta.stageNumber = cfg('stagenumber'); meta.headLoss = cfg('headloss'); meta.fan = cfg('fan'); meta.method = cfg('method');
     meta.operator = t(configs.Operator || meta.params.N_O); meta.groutName = t(configs['Grout Name'] || configs.GroutName || meta.params.CL);
     meta.company = t(meta.params.N_E);
     const lastOf = (n) => { for (let i = events.length - 1; i >= 0; i--) if (events[i].name === n) return events[i]; };
@@ -354,7 +356,7 @@
     return {
       company: pick('company', m.company), site: pick('site', m.jobSite), contract: pick('contract', m.contract),
       job: pick('job', m.jobName), operator: pick('operator', m.operator), pump: pick('pump', ''), grout: pick('grout', m.groutName),
-      zone: pick('zone', ''), sleeve: pick('sleeve', ''), top: pick('top', ''), bottom: pick('bottom', ''),
+      zone: pick('zone', ''), sleeve: pick('sleeve', m.stageNumber), top: pick('top', m.topDepth), bottom: pick('bottom', m.bottomDepth), fan: pick('fan', m.fan),
     };
   }
 

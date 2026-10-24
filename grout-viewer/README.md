@@ -99,6 +99,6 @@ Read **RE-NOTES.md** before relying on the numbers. In short:
 * The original's *average* and *30 s* pressure for the two sample holes are ≈0.1 bar above the raw-sample values. This is very likely its *effective pressure* (grout column). The option exists (off by default, as in the original); the exact density/level used by the original for those holes is unknown, so it is not applied automatically.
 * The volume-distribution and water-test (Lugeon) pages are interpretations of the original's menus (no specimen); the Lugeon logic of the original is native code that could not be read, so stages are detected here from events or pressure plateaus.
 * Only one-sleeve printouts were available. Multi-sleeve pages, other stop types and the depth report with several sleeves follow the same rules but are not verified against real prints.
-* The Original's clipped grout label ("Unknow") is printed in full ("Unknown").
+* An unnamed grout prints the original's own literal default, **"Unknow"** (it is spelled that way in the original's code).
 
 No warranty; verify printed values before relying on them.

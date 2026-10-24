@@ -43,9 +43,13 @@
   function findStages(rec, minStage) {
     const S = rec.samples, n = S.length, ev = rec.events, clamp = (i) => Math.min(n - 1, Math.max(0, i | 0)), out = [];
     const starts = ev.filter((e) => /^lugeonstart$/i.test(e.name)), stops = ev.filter((e) => /^lugeonstop$/i.test(e.name));
+    /* Device format (decoded from the original's managed code): LugeonStart data "stage;set pressure;planned duration",
+       LugeonStop data "stage;mean pressure;duration;total volume" (SI units like the channels). */
+    const field = (e, k) => G.parseNumber(String((e && e.data) || '').split(';')[k]);
     starts.forEach((s, i) => {
-      const stop = stops.find((x) => x.idx >= s.idx), end = stop ? stop.idx : (starts[i + 1] ? starts[i + 1].idx - 1 : n - 1);
-      if (clamp(end) > clamp(s.idx)) out.push({ a: clamp(s.idx), b: clamp(end), src: 'events' });
+      const num = field(s, 0), stop = (isNum(num) && stops.find((x) => field(x, 0) === num && x.idx >= s.idx)) || stops.find((x) => x.idx >= s.idx);
+      const end = stop ? stop.idx : (starts[i + 1] ? starts[i + 1].idx - 1 : n - 1);
+      if (clamp(end) > clamp(s.idx)) out.push({ a: clamp(s.idx), b: clamp(end), src: 'events', setP: field(s, 1), planDur: field(s, 2), dev: stop ? { p: field(stop, 1), dur: field(stop, 2), vol: field(stop, 3) } : null });
     });
     if (out.length) return out;
     const wins = G.windows(rec), idx = []; if (wins.length) wins.forEach((w) => { for (let i = w.a; i <= w.b; i++) idx.push(i); }); else for (let i = 0; i < n; i++) idx.push(i);
@@ -59,17 +63,25 @@
     return out;
   }
   /* Apparent Lugeon: flow per metre of tested length, scaled to 10 bar of effective pressure (the unit of the original's caption). */
+  /* The original subtracts a head-loss polynomial of the flow, c0 + c1*Q + c2*Q^2 (bar, Q in l/min), from the measured pressure (DLGPVD.EXE 0x716d90). */
+  function headLoss(qLmin, L) { return L.lossBar + L.lossLin * qLmin + L.lossQuad * qLmin * qLmin; }
   function lugeon(qLmin, lengthM, pBar, L) {
-    const peff = pBar + L.staticM * 0.0981 - L.lossBar;
+    const peff = pBar + L.staticM * 0.0981 - headLoss(qLmin, L);
     return lengthM > 0 && peff > 0 ? (qLmin / lengthM) * (10 / peff) : NaN;
   }
   G.waterTest = function (rec, hdr, lug) {
-    const S = rec.samples, L = Object.assign({ staticM: 0, lossBar: 0, lengthM: 0, minStage: 30 }, lug || {});
+    const S = rec.samples, L = Object.assign({ staticM: 0, lossBar: 0, lossLin: 0, lossQuad: 0, lengthM: 0, minStage: 30 }, lug || {});
     const top = G.parseNumber(hdr && hdr.top), bottom = G.parseNumber(hdr && hdr.bottom), length = L.lengthM > 0 ? L.lengthM : (isNum(top) && isNum(bottom) ? Math.abs(bottom - top) : 0);
+    /* the device's own figures are used when they agree with the samples (guards against a unit I could not verify) */
+    const near = (a, b) => isNum(a) && isNum(b) && Math.abs(a - b) <= 0.15 * Math.abs(b) + 1e-9;
+    const choose = (cands, sample) => { for (const c of cands) if (near(c, sample)) return { v: c, dev: true }; return { v: sample, dev: false }; };
     const stages = findStages(rec, L.minStage).map((s, i) => {
-      const seg = S.slice(s.a, s.b + 1), dur = S[s.b].tm - S[s.a].tm, p = mean(seg.map((x) => x.pBar)), q = mean(seg.map((x) => x.qLmin));
+      const seg = S.slice(s.a, s.b + 1), durS = S[s.b].tm - S[s.a].tm, pS = mean(seg.map((x) => x.pBar)), q = mean(seg.map((x) => x.qLmin));
+      let vS = 0; for (let k = 1; k < seg.length; k++) { const d = seg[k].vL - seg[k - 1].vL; if (d > 0) vS += d; } // sum of positive volume increments, as the device does
+      const dv = s.dev || {}, pc = choose([dv.p / 1e5, dv.p], pS), dc = choose([dv.dur, dv.dur / 1000], durS), vc = choose([dv.vol * 1000, dv.vol], vS);
+      const dur = dc.v, p = pc.v, vol = vc.v, setP = isNum(s.setP) ? (s.setP > 1000 ? s.setP / 1e5 : s.setP) : NaN;
       const tail = seg.filter((x) => x.tm >= S[s.b].tm - 30), q30 = mean(tail.map((x) => x.qLmin)), p30 = mean(tail.map((x) => x.pBar));
-      return { n: i + 1, a: s.a, b: s.b, src: s.src, start: S[s.a].tm, dur, p, q, vol: S[s.b].vL - S[s.a].vL, pq: p > 0.05 ? q / p : NaN, lugeon: lugeon(q, length, p, L), lugeon30: lugeon(q30, length, p30, L) };
+      return { n: i + 1, a: s.a, b: s.b, src: s.src, device: pc.dev || dc.dev || vc.dev, setP, start: S[s.a].tm, dur, p, q, vol, pq: p > 0.05 ? q / p : NaN, lugeon: lugeon(q, length, p, L), lugeon30: lugeon(q30, length, p30, L) };
     }).filter((s) => s.dur > 0);
     const last = stages[stages.length - 1];
     return { stages, length, final: last ? last.lugeon30 : NaN, totalDur: stages.reduce((n, s) => n + s.dur, 0), totalVol: stages.reduce((n, s) => n + s.vol, 0) };
@@ -92,14 +104,15 @@
     P.poly(idxs.map((i) => [x0 + e.d.T[i] / tMax * Wd, yB - e.d.series.q[i] / qMax * Ht]), { c: opt.o.q.color, w: 0.34 });
     P.text(t('o.pressure').replace('(bar)', '(' + O_.units().PU + ')'), M.L + 2, yT - 2.5, { size: 8.88, bold: true, c: opt.o.p.color }); P.text('Q (l/min)', M.R - 2, yT - 2.5, { size: 8.88, bold: true, align: 'right', c: opt.o.q.color });
     /* table of stages */
-    const cols = [[t('o.lug.stage'), 16, 'left'], [t('o.lug.start'), 24, 'right'], [t('o.lug.dur'), 28, 'right'], [t('o.lug.p'), 34, 'right'], [t('o.lug.q'), 34, 'right'], [t('o.lug.vol'), 28, 'right'], [t('o.lug.pq'), 36, 'right'], [t('o.lug.l'), 54, 'right']];
+    const hasSet = w.stages.some((s) => isNum(s.setP));
+    const cols = [[t('o.lug.stage'), 16, 'left'], [t('o.lug.start'), 24, 'right'], [t('o.lug.dur'), 28, 'right']].concat(hasSet ? [[t('o.lug.set'), 30, 'right']] : [], [[t('o.lug.p'), 34, 'right'], [t('o.lug.q'), 34, 'right'], [t('o.lug.vol'), 28, 'right'], [t('o.lug.pq'), 30, 'right'], [t('o.lug.l'), hasSet ? 38 : 54, 'right']]);
     const tw = cols.reduce((n, c) => n + c[1], 0), tx = x0, rh = 5.6, perPage = 11;
     const drawTable = (Q, y0, rows) => {
       Q.rect(tx, y0, tw, rh + 1, { stroke: '#000', w: GEO.thin, fill: '#ececec' });
       let x = tx; cols.forEach((c) => { Q.text(G.fit(c[0], c[1] - 2, 7.4, true), c[2] === 'right' ? x + c[1] - 1.2 : x + 1.2, y0 + rh - 0.6, { size: 7.4, bold: true, align: c[2] === 'right' ? 'right' : 'left' }); x += c[1]; });
       rows.forEach((s, i) => {
         const y = y0 + rh + 1 + i * rh; Q.rect(tx, y, tw, rh, { stroke: '#000', w: GEO.thin });
-        const cells = [String(s.n), G.fmtHMS(s.start).replace(/^00:/, ''), G.fmtHMS(s.dur).replace(/^00:/, ''), dec(s.p, 2), dec(s.q, 2), dec(s.vol, 2), dec(s.pq, 2), isNum(s.lugeon) ? dec(s.lugeon, 1) : '-'];
+        const cells = [String(s.n), G.fmtHMS(s.start).replace(/^00:/, ''), G.fmtHMS(s.dur).replace(/^00:/, '')].concat(hasSet ? [isNum(s.setP) ? dec(s.setP, 2) : '-'] : [], [dec(s.p, 2), dec(s.q, 2), dec(s.vol, 2), dec(s.pq, 2), isNum(s.lugeon) ? dec(s.lugeon, 1) : '-']);
         let xx = tx; cols.forEach((c, k) => { Q.text(cells[k], c[2] === 'right' ? xx + c[1] - 1.2 : xx + 1.2, y + rh - 1.5, { size: 8.4, align: c[2] === 'right' ? 'right' : 'left' }); xx += c[1]; });
       });
       return y0 + rh + 1 + rows.length * rh;
@@ -111,7 +124,7 @@
     }
     const L = pages[pages.length - 1], yb = Math.min(yEnd + 8, 186);
     L.text(t('o.lug.nstages') + ': ' + w.stages.length + '     ' + t('o.lug.totdur') + ': ' + G.fmtHMS(w.totalDur) + '     ' + t('o.lug.totvol') + ': ' + dec(w.totalVol, 2) + ' l     ' + t('o.lug.final') + ': ' + (isNum(w.final) ? dec(w.final, 1) : '-') + ' (l/min/m, 10 bar)', M.L + 3, yb, { size: 8.88, bold: true });
-    L.text(w.stages.length ? t('o.lug.note', { len: w.length > 0 ? dec(w.length, 2) : '?', src: w.stages[0].src === 'events' ? t('o.lug.src.ev') : t('o.lug.src.pl') }) : t('o.lug.none'), M.L + 3, yb + 5, { size: 6.8, c: GEO.grey });
+    L.text(w.stages.length ? t('o.lug.note', { len: w.length > 0 ? dec(w.length, 2) : '?', src: w.stages[0].src === 'events' ? (w.stages[0].device ? t('o.lug.src.dev') : t('o.lug.src.ev')) : t('o.lug.src.pl') }) : t('o.lug.none'), M.L + 3, yb + 5, { size: 6.8, c: GEO.grey });
     return pages;
   };
 })(window.G = window.G || {});

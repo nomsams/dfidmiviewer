@@ -36,7 +36,7 @@
         smoothP: { on: false, s: 5 }, smoothQ: { on: false, s: 5 },
         title1: '', title2: '', boreholeLabel: '', appTag: 'DLGPVD  6.61', footerLeft: '...', footerText: 'JEAN LUTZ S.A - Jurançon - France - www.jeanlutzsa.fr',
         logo: '', logoW: 0, logoH: 0, density: 1000, dec: '', pvgPen: true, pUnit: 'bar', decimals: 1,
-        lug: { staticM: 0, lossBar: 0, lengthM: 0, minStage: 30 },
+        lug: { staticM: 0, lossBar: 0, lossLin: 0, lossQuad: 0, lengthM: 0, minStage: 30 },
         sel: { oneSleeve: false, cumRerun: false, sleeveInfo: true, limits: true, stopType: true, endTime: false, duration: false, groutType: true, totalVol: true, volLimit: true, avgPQ: false, finalP: false, eff: false },
       },
     };
