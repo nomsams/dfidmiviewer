@@ -34,7 +34,7 @@
         p: { on: true, scale: 50, color: '#0000ff' }, q: { on: false, scale: 100, color: '#00ff00' }, v: { on: false, scale: 100, color: '#ff8000' },
         d: { on: false, scale: 50, color: '#804040' }, g: { on: false, scale: 100, color: '#000000' },
         smoothP: { on: false, s: 5 }, smoothQ: { on: false, s: 5 },
-        title1: '', title2: '', boreholeLabel: '', appTag: 'DLGPVD  6.61', footerLeft: '...', footerText: 'JEAN LUTZ S.A - Jurançon - France - www.jeanlutzsa.fr',
+        title1: '', title2: '', boreholeLabel: '', appTag: '', footerLeft: '', footerText: '',
         logo: '', logoW: 0, logoH: 0, density: 1000, angle: 0, waterDepth: 0, dec: '', pvgPen: true, pUnit: 'bar', decimals: 1,
         lug: { staticM: 0, lossBar: 0, lossLin: 0, lossQuad: 0, lengthM: 0, minStage: 30 },
         sel: { oneSleeve: false, cumRerun: false, sleeveInfo: true, limits: true, stopType: true, endTime: false, duration: false, groutType: true, totalVol: true, volLimit: true, avgPQ: false, finalP: false, eff: false },

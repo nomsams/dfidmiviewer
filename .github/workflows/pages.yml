@@ -21,14 +21,15 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - name: Add the Grout Report Viewer (static app, no build)
+      - name: Assemble the site (Grout Report Viewer at the root, DFI Viewer under /dfi-viewer/)
         run: |
           (cd grout-viewer && npm test)
-          mkdir -p dist/grout-viewer
-          cp -r grout-viewer/index.html grout-viewer/css grout-viewer/js dist/grout-viewer/
+          mkdir -p site/dfi-viewer
+          cp -r dist/. site/dfi-viewer/
+          cp -r grout-viewer/index.html grout-viewer/css grout-viewer/js site/
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
         with:
-          path: dist
+          path: site
   deploy:
     if: github.event_name != 'pull_request'
     needs: build
@@ -53,8 +54,9 @@ jobs:
       - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
         id: deployment
       - name: Verify published entry point and assets
-        run: node scripts/verify-pages.mjs site '${{ steps.deployment.outputs.page_url }}'
-      - name: Verify the Grout Report Viewer is published
+        run: node scripts/verify-pages.mjs site '${{ steps.deployment.outputs.page_url }}dfi-viewer/'
+      - name: Verify the Grout Report Viewer is the main page
         run: |
-          curl -fsSL "${{ steps.deployment.outputs.page_url }}grout-viewer/" | grep -q 'Grout'
-          curl -fsSL -o /dev/null "${{ steps.deployment.outputs.page_url }}grout-viewer/js/original.js"
+          curl -fsSL "${{ steps.deployment.outputs.page_url }}" | grep -q 'Grout Report Viewer'
+          curl -fsSL -o /dev/null "${{ steps.deployment.outputs.page_url }}js/original.js"
+          curl -fsSL -o /dev/null "${{ steps.deployment.outputs.page_url }}js/vendor/jspdf.umd.min.js"

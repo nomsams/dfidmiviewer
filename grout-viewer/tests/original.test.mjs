@@ -12,6 +12,8 @@ const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${
 function build(reports) {
   const rec = loadSample(1), opt = options({ layout: 'classic' });
   opt.o.dec = ','; Object.assign(opt.o.reports, { time: false, pvg: false, pvf: false }, reports);
+  /* the specimens carry the original program's tag and footer; the app leaves them out by default, so they are switched on to compare the geometry */
+  if (!reports || reports.noTags !== true) Object.assign(opt.o, { appTag: 'DLGPVD  6.61', footerLeft: '...', footerText: 'JEAN LUTZ S.A - Jurançon - France - www.jeanlutzsa.fr' });
   const doc = recordDoc();
   G.buildDocument(doc, [itemOf(rec, { sleeve: '1', top: '1', bottom: '1' })], opt, 'records');
   return doc;
@@ -164,4 +166,11 @@ test('pressure/volume/flow with many deep sleeves: the diagram is compressed to 
   assert.ok(t.some((s) => /^1\/\d+$/.test(s) && s !== '1/100'), 'scale label follows the compression');
   const maxY = Math.max(...P.ops.filter((o) => o.k === 'rect').map((o) => o.a[1] + o.a[3]));
   assert.ok(maxY <= 203.5, 'nothing below the frame: ' + maxY);
+});
+
+test('the generated pages carry no mention of the original program by default', () => {
+  const doc = build({ time: true, pvg: true, pvf: true, noTags: true });
+  const all = doc.pages.flatMap((p) => p.ops.filter((o) => o.k === 'text').map((o) => String(o.a[0]))).join('|');
+  assert.ok(!/DLGPVD|LUTZ|jeanlutz/i.test(all), 'no DLGPVD / Jean Lutz text');
+  assert.ok(!all.includes('|...|'), 'no placeholder footer');
 });

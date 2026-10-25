@@ -113,7 +113,7 @@
     P.text('(' + t('o.contract') + ' : ' + contract + ')', R, 14.56, { size: 8.16, align: 'right' });
     P.text(title, m.cell + 3.04, 23.79, { size: 8.88 });
     const soft = firstItem && firstItem.rec.meta.softVersion ? firstItem.rec.meta.softVersion : 'DPV';
-    P.text((O.appTag || 'DLGPVD  6.61') + '/' + soft, R, 27.56, { size: 8.16, c: H.grey, align: 'right' });
+    if (O.appTag) P.text(O.appTag + '/' + soft, R, 27.56, { size: 8.16, c: H.grey, align: 'right' }); // off by default: the printouts carry no mention of the original program
   }
   const lvl = (s) => { const n = G.parseNumber(s); return isNum(n) ? String(+n.toFixed(2)).replace('.', sep()) : String(s || '').trim(); };
   function levelsText(hdr) { const a = lvl(hdr.top), b = lvl(hdr.bottom); return a || b ? ' (' + (a || b) + '-' + (b || a) + ' m)' : ''; }
@@ -284,8 +284,8 @@
     if (O.reports.lug && G._o.extras.lug) usable.forEach((e) => pages.push(...G._o.extras.lug(doc, e, opt)));
     /* footer: text line and page number (as on the specimens) */
     pages.forEach((P, i) => {
-      P.text(O.footerLeft == null ? '...' : O.footerLeft, 5.0, 207.35, { size: 8.16, c: GEO.grey });
-      P.text(O.footerText == null ? 'JEAN LUTZ S.A - Jurançon - France - www.jeanlutzsa.fr' : O.footerText, 212.09, 207.35, { size: 8.16, c: GEO.grey });
+      if (O.footerLeft) P.text(O.footerLeft, 5.0, 207.35, { size: 8.16, c: GEO.grey });
+      if (O.footerText) P.text(O.footerText, 212.09, 207.35, { size: 8.16, c: GEO.grey });
       P.text((i + 1) + '/' + pages.length, 291.99, 207.35, { size: 8.16, align: 'right', bold: true });
       P.noFooter = true;
     });
