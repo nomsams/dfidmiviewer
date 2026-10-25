@@ -21,6 +21,11 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Add the Grout Report Viewer (static app, no build)
+        run: |
+          (cd grout-viewer && npm test)
+          mkdir -p dist/grout-viewer
+          cp -r grout-viewer/index.html grout-viewer/css grout-viewer/js dist/grout-viewer/
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
         with:
           path: dist
@@ -49,3 +54,7 @@ jobs:
         id: deployment
       - name: Verify published entry point and assets
         run: node scripts/verify-pages.mjs site '${{ steps.deployment.outputs.page_url }}'
+      - name: Verify the Grout Report Viewer is published
+        run: |
+          curl -fsSL "${{ steps.deployment.outputs.page_url }}grout-viewer/" | grep -q 'Grout'
+          curl -fsSL -o /dev/null "${{ steps.deployment.outputs.page_url }}grout-viewer/js/original.js"
