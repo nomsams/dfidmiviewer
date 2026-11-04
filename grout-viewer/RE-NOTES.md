@@ -53,6 +53,9 @@ Found by reading the .NET IL of `DialogDesktop.dll` (`InfosRecords.Injection`), 
 Head loss polynomial in the same class: `CalcHeadLoss(Q) = c0 + c1*Q + c2*Q^2` (Pa; `CalcHeadLossBar` = the same with Q in l/min (x1.6667e-5 per factor) divided by 1e5 and rounded to 2 decimals).
 The pressure unit setting `Unite Pression` maps 0 -> x1 (bar), 1 -> x1.01972 (kg/cm2), 2 -> x100 (kPa) in the export.
 
+## The export table (Site > Export > Field separator > Semicolon)
+Reproduced from a pair of real export rows supplied by the user, with the .NET code of `DXdataPVD.MDB.MdbManage.AddToMDB` (IL) as the guide. One row per `.DFI`, 29 columns in the order of `BILAN_COLUMNS`. What the DFI import writes (IL, "DPV" path): `Pump` is always `P1`, `Regrout` 1, `X/Y/Z_coord` 0, `Water_depth` 0, levels default to 1 m when the file has none, `Grout` is the number of the grout in the grout table (1 when unnamed), `Injected_volume` = rounded to 2 decimals, `Dry_weights` equals the volume in the examples, `Head_loss` = the file's head loss (Pa) / 1e5, subtracted from the mean, 30 s and end pressure (floored at 0). Durations are cut to whole seconds, not rounded (`00:07:32` for 452.8 s). The original writes no value for the empty last column (`Inclination`), so rows have 28 fields. Measured against the two examples: every field matches except three pressure cells that differ by 0.01 bar when the effective pressure (+0.1 bar for a 1 m section) is added, so the mean and 30 s pressure columns are reproduced to within the rounding of the export, not bit for bit. The raw values (option off) equal the original database table exactly (2,05 / 2,02 and 2,13 / 1,67).
+
 ## Printouts: measured from real specimens
 
 Three real printouts ("Microsoft Print to PDF", A4 landscape) were analysed as vector data (`tests/fixtures/spec-*.json`, extracted with a content-stream parser; coordinates are snapped to the printer's 0.26 mm grid). Findings that drive `js/original.js`:

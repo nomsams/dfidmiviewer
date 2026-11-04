@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 globalThis.window = globalThis;
 const jspdf = require(path.join(root, 'js/vendor/jspdf.umd.min.js'));
 globalThis.jspdf = { jsPDF: jspdf.jsPDF || jspdf.default || jspdf };
-for (const f of ['samples', 'i18n', 'core', 'draw', 'report', 'original', 'original2']) {
+for (const f of ['samples', 'i18n', 'core', 'draw', 'report', 'original', 'original2', 'i18n-export', 'zip', 'intake', 'xlsx', 'export']) {
   vm.runInThisContext(fs.readFileSync(path.join(root, 'js', f + '.js'), 'utf8'), { filename: f + '.js' });
 }
 export const G = globalThis.G;

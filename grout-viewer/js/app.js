@@ -12,7 +12,7 @@
   const PREF_KEY = 'groutviewer.prefs.v1';
 
   const S = {
-    entries: [], cur: null, mode: 'simple', theme: 'auto', tab: 'overview', errors: [],
+    entries: [], cur: null, mode: 'export', theme: 'auto', tab: 'overview', errors: [], skipped: [], load: null,
     show: { p: true, q: true, v: true }, opt: G.defaultOptions(), pageRange: '', dataPage: 0, designerPage: 0, ov: null, notices: [],
   };
   G.S = S;
@@ -32,7 +32,7 @@
   function loadPrefs() {
     try {
       const p = JSON.parse(localStorage.getItem(PREF_KEY) || 'null');
-      if (p) { if (THEMES.includes(p.theme)) S.theme = p.theme; if (p.mode === 'advanced') S.mode = 'advanced'; if (G.LANGS[p.lang]) G.setLang(p.lang); deepMerge(S.opt, p.opt); }
+      if (p) { if (THEMES.includes(p.theme)) S.theme = p.theme; if (['export', 'simple', 'advanced'].indexOf(p.mode) >= 0) S.mode = p.mode; if (G.LANGS[p.lang]) G.setLang(p.lang); deepMerge(S.opt, p.opt); }
     } catch (e) { /* ignore */ }
   }
   function savePrefs() {
@@ -64,19 +64,40 @@
     if (f.arrayBuffer) return f.arrayBuffer();
     return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = () => reject(r.error || new Error('read')); r.readAsArrayBuffer(f); });
   }
-  async function addFiles(files) {
-    let added = 0;
-    for (const f of files) {
-      try { addBuffer(f.name, await readFile(f)); added++; }
-      catch (e) { S.errors.push({ name: f.name, text: errorText(e) }); }
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  /* files, folders and .zip archives; any number (the work is sliced so the page stays responsive and shows progress) */
+  async function addFiles(input) {
+    const descs = Array.from(input || []).map((f) => (f && f.read ? f : G.intake.describe(f, !!f.webkitRelativePath)));
+    if (!descs.length) return;
+    S.load = { done: 0, total: descs.length }; if (S.mode === 'export') G.exporter.render();
+    let ex; try { ex = await G.intake.expand(descs); } catch (e) { ex = { items: [], ignored: 0, failed: [{ name: '', code: 'notZip' }] }; }
+    ex.failed.forEach((f) => { S.skipped.push({ name: f.name, text: t('err.' + f.code) }); S.errors.push({ name: f.name, text: t('err.' + f.code) }); });
+    if (ex.ignored) S.skipped.push({ name: '', text: t('x.ignored', { n: ex.ignored }) });
+    S.load = { done: 0, total: ex.items.length };
+    const seen = new Set(S.entries.map((e) => e.key)); let added = 0, last = Date.now();
+    for (const d of ex.items) {
+      const key = d.path + '|' + d.size + '|' + d.mtime;
+      if (seen.has(key)) S.skipped.push({ name: d.name, text: t('err.duplicate') });
+      else {
+        try { const e = addBuffer(d.name, await d.read()); e.key = key; seen.add(key); added++; }
+        catch (e) { const txt = errorText(e); S.errors.push({ name: d.name, text: txt }); S.skipped.push({ name: d.name, text: txt }); }
+      }
+      S.load.done++;
+      if (Date.now() - last > 60) { if (S.mode === 'export') G.exporter.render(); await tick(); last = Date.now(); }
     }
+    S.load = null;
     if (added && S.mode === 'simple') S.tab = 'overview';
     render();
   }
   function loadSamples() {
-    for (const s of window.GV_SAMPLES || []) { try { addBuffer(s.name, G.b64ToBuffer(s.b64)); } catch (e) { S.errors.push({ name: s.name, text: errorText(e) }); } }
+    for (const s of window.GV_SAMPLES || []) {
+      if (S.entries.some((e) => e.key === 'sample:' + s.name)) continue;
+      try { const e = addBuffer(s.name, G.b64ToBuffer(s.b64)); e.key = 'sample:' + s.name; } catch (e) { S.errors.push({ name: s.name, text: errorText(e) }); }
+    }
     render();
   }
+  function removeEntry(id) { S.entries = S.entries.filter((e) => e.id !== id); if (S.cur === id) S.cur = S.entries.length ? S.entries[0].id : null; render(); }
+  function clearAll() { S.entries = []; S.cur = null; S.errors = []; S.skipped = []; render(); }
 
   /* ---------- building documents ---------- */
   function build(backend, kind, entries, layout) {
@@ -169,7 +190,7 @@
       if (c) { S.cur = c.dataset.id; S.dataPage = 0; S.designerPage = 0; render(); return; }
       if (ev.target.id === 'addMore') $('#fileInput').click();
       if (ev.target.id === 'goSummary') { if (S.mode === 'simple') openPreview('summary', S.entries); else setTab('summary'); }
-      if (ev.target.id === 'clearAll') { S.entries = []; S.cur = null; S.errors = []; render(); }
+      if (ev.target.id === 'clearAll') clearAll();
     };
   }
 
@@ -444,10 +465,11 @@
   /* ---------- top level ---------- */
   function setMode(m) { S.mode = m; savePrefs(); render(); }
   function render() {
-    const has = S.entries.length > 0;
-    $('#welcome').hidden = has; $('#workspace').hidden = !has;
+    const has = S.entries.length > 0, ex = S.mode === 'export';
+    $('#exporter').hidden = !ex; $('#welcome').hidden = ex || has; $('#workspace').hidden = ex || !has;
     document.body.dataset.mode = S.mode;
     $$('#modeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === S.mode)));
+    if (ex) { G.exporter.render(); return; }
     $('#simple').hidden = S.mode !== 'simple'; $('#advanced').hidden = S.mode !== 'advanced';
     if (!has) { renderNoticesOnly(); return; }
     renderRecbar(); renderNotices();
@@ -464,7 +486,7 @@
     } catch (e) { return false; }
   }
   function init() {
-    if (!supported()) { const w = document.getElementById('welcome'); if (w) w.innerHTML = '<div class="drop"><h1>' + G.t('app.name') + '</h1><p>' + G.t('err.browser') + '</p></div>'; return; }
+    if (!supported()) { const w = document.getElementById('welcome'); const x = document.getElementById('exporter'); if (x) x.hidden = true; if (w) w.hidden = false; if (w) w.innerHTML = '<div class="drop"><h1>' + G.t('app.name') + '</h1><p>' + G.t('err.browser') + '</p></div>'; return; }
     loadPrefs();
     if (!G.LANGS[G.lang]) G.setLang('en');
     document.body.dataset.theme = S.theme;
@@ -475,12 +497,22 @@
     $('#pickBtn').onclick = () => $('#fileInput').click();
     $('#sampleBtn').onclick = loadSamples;
     $('#fileInput').onchange = (ev) => { addFiles(Array.from(ev.target.files)); ev.target.value = ''; };
-    const drop = $('#drop');
+    $('#dirInput').onchange = (ev) => { addFiles(Array.from(ev.target.files).map((f) => G.intake.describe(f, true))); ev.target.value = ''; };
+    $('#wToExcel').onclick = () => setMode('export');
+    G.exporter.init({
+      S, isUpdate, ovOf, toast, downloadBlob, setMode, save: savePrefs,
+      pick: () => $('#fileInput').click(), pickDir: () => $('#dirInput').click(), samples: loadSamples, remove: removeEntry, clear: clearAll,
+      openReport: (id) => { S.cur = id; setMode('simple'); }, pdfZip: (list) => exportZipPdfs(list),
+    });
+    const drop = $('#drop'), xdrop = $('#xDrop'), over = (on) => { drop.classList.toggle('over', on); xdrop.classList.toggle('over', on); };
     drop.onclick = (ev) => { if (!ev.target.closest('button')) $('#fileInput').click(); };
     drop.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); $('#fileInput').click(); } };
-    window.addEventListener('dragover', (ev) => { ev.preventDefault(); drop.classList.add('over'); });
-    window.addEventListener('dragleave', (ev) => { if (!ev.relatedTarget) drop.classList.remove('over'); });
-    window.addEventListener('drop', (ev) => { ev.preventDefault(); drop.classList.remove('over'); if (ev.dataTransfer && ev.dataTransfer.files.length) addFiles(Array.from(ev.dataTransfer.files)); });
+    window.addEventListener('dragover', (ev) => { ev.preventDefault(); over(true); });
+    window.addEventListener('dragleave', (ev) => { if (!ev.relatedTarget) over(false); });
+    window.addEventListener('drop', (ev) => {
+      ev.preventDefault(); over(false);
+      if (ev.dataTransfer && (ev.dataTransfer.files.length || (ev.dataTransfer.items && ev.dataTransfer.items.length))) G.intake.fromDrop(ev.dataTransfer).then(addFiles).catch((e) => { console.error(e); toast(t('err.unknown')); });
+    });
 
     /* simple actions */
     $$('input[name=sLay]').forEach((r) => { r.onchange = () => { S.opt.layout = r.value; savePrefs(); $('#sOrigOpts').hidden = r.value !== 'classic'; }; });
@@ -504,6 +536,6 @@
     if (location.hash === '#demo') loadSamples();
   }
 
-  G.app = { S, addBuffer, render, openPreview, savePdf, build };
+  G.app = { S, addBuffer, addFiles, render, openPreview, savePdf, build };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })(window.G = window.G || {});

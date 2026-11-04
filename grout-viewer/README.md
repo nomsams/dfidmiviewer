@@ -7,7 +7,12 @@ Pure HTML, CSS and JavaScript. No build step, no server, no uploads: everything 
 
 Open `index.html` in a browser (double-click works), or serve the folder with any static web server.
 
-**Simple mode (default)** – for people who just want the result:
+**Excel export (default)** – one spreadsheet from many measurement files:
+1. Add files in any of three ways: **drag and drop** them (or a whole folder, or a `.zip`), **click the box**, or press **Choose files…** / **Choose a folder…**. A hundred files or more are fine (720 were tried; reading is sliced so the page stays responsive and shows progress). The same file added twice is skipped.
+2. Tick the files to include, choose the columns (the ones that contain data are ticked for you; *All columns* gives the original's 29), and optionally add a totals row, sort the rows, or add the effective pressure.
+3. Slide the switch between **Excel (.xlsx)** (default) and **CSV**, then **Download**. The CSV is the original program's *Site > Export > Field separator > Semicolon* file (header, `;`, decimal comma, one row per file). You can also copy the table to the clipboard or get all PDF reports as a ZIP.
+
+**Reports mode** – for people who just want to read and print one file:
 1. Drag a `.DFI` file onto the page (or *Choose file…*, or *Try an example*).
 2. Read the key numbers and the pressure / flow / volume chart.
 3. Pick the report style (**Original** or **Modern**), optionally the report and "fit the axes automatically", then **Print**, **Save as PDF** or **Preview**.

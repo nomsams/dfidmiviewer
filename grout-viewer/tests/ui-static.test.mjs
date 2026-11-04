@@ -45,3 +45,16 @@ test('no syntax newer than the supported browsers in the app scripts', () => {
     }
   }
 });
+
+test('the export view: every element it looks up exists, scripts load in order, and its three ways to add files are wired', () => {
+  const ex = read('js/exporter.js'), ids = new Set([...html.matchAll(/\bid="([\w-]+)"/g)].map((m) => m[1]));
+  const wanted = new Set([...ex.matchAll(/\$\('#([\w-]+)'\)/g)].map((m) => m[1]));
+  assert.deepEqual([...wanted].filter((i) => !ids.has(i)), [], 'ids used by exporter.js');
+  const order = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  ['js/i18n.js', 'js/i18n-export.js'].reduce((a, b) => { assert.ok(order.indexOf(b) > order.indexOf(a), b + ' after ' + a); return b; });
+  ['js/zip.js', 'js/intake.js', 'js/xlsx.js', 'js/export.js', 'js/exporter.js', 'js/app.js'].reduce((a, b) => { assert.ok(order.indexOf(a) >= 0 && order.indexOf(b) > order.indexOf(a), b + ' after ' + a); return b; });
+  assert.ok(/id="xDrop"/.test(html) && /id="xPick"/.test(html) && /id="xPickDir"/.test(html) && /id="dirInput"[^>]*webkitdirectory/.test(html), 'drop box, file button, folder button');
+  assert.ok(/drop\.addEventListener\('click'/.test(ex) && /\$\('#xPick'\)\.onclick/.test(ex), 'clicking the box and the button both open the file chooser');
+  assert.ok(/fromDrop\(ev\.dataTransfer\)/.test(app), 'dropping is handled by the folder-aware intake');
+  assert.ok(/data-mode="export"/.test(html) && /data-mode="simple"/.test(html) && /data-mode="advanced"/.test(html));
+});

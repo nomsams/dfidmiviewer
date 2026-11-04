@@ -26,6 +26,7 @@
       scales: { t: 0, p: 0, q: 0, v: 0, d: 0, g: 0 },
       obsHeight: 22, obsTitle: '', visaCount: 2, visaTitles: ['', '', ''],
       ginLimit: 0, summaryCols: null,
+      xp: { fmt: 'xlsx', colMode: 'data', custom: [], eff: true, totals: false, sort: 'date', dec: ',' },
       mc: { sort: 'date', asc: true, daily: true, pMode: 'avg', qMode: 'avg', pMin: 0, pMax: 0, qMin: 0, qMax: 0, hMin: 0, hMax: 24, stop: '', pump: '', dateFrom: '', dateTo: '' },
       o: {
         reports: { time: true, pvg: false, pvf: false, hist: false, lug: false },

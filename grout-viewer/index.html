@@ -8,7 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Cpath d='M5 22 11 14l5 5 6-9 5 7' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/app.css">
 </head>
-<body data-theme="auto" data-mode="simple">
+<body data-theme="auto" data-mode="export">
 
 <header class="top">
   <div class="brand">
@@ -17,7 +17,8 @@
   </div>
   <div class="spacer"></div>
   <div class="seg" id="modeSeg" role="group" aria-label="Mode">
-    <button type="button" data-mode="simple" data-i="mode.simple">Simple</button>
+    <button type="button" data-mode="export" data-i="mode.export">Excel export</button>
+    <button type="button" data-mode="simple" data-i="mode.simple">Reports</button>
     <button type="button" data-mode="advanced" data-i="mode.advanced">Advanced</button>
   </div>
   <label class="sel"><span class="sr" data-i="ui.theme">Theme</span>
@@ -27,6 +28,80 @@
 </header>
 
 <main id="app">
+  <!-- Excel / CSV export -->
+  <section id="exporter" class="exporter" hidden>
+    <div class="xdrop" id="xDrop" tabindex="0" role="button" aria-label="Add files">
+      <svg class="xico" viewBox="0 0 48 48" width="52" height="52" aria-hidden="true"><path d="M24 33V11m0 0-8 8m8-8 8 8M9 33v4a3 3 0 0 0 3 3h24a3 3 0 0 0 3-3v-4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="xdrop-t">
+        <h1 id="xDropT" data-i="x.title">Make an Excel file from your measurements</h1>
+        <p id="xDropSub" data-i="x.sub">Drop one or many .DFI files here. Whole folders and .zip files work too.</p>
+        <p id="xDropMore" class="xmore" hidden data-i="x.addmore">Drop more files here, or click to add</p>
+        <div id="xProg" class="xprog" hidden role="progressbar" aria-live="polite"><div class="xbar"><i id="xProgBar"></i></div><span id="xProgTxt"></span></div>
+      </div>
+      <div class="row" id="xDropActions">
+        <button type="button" class="btn primary big" id="xPick" data-i="x.choose">Choose files…</button>
+        <button type="button" class="btn big" id="xPickDir" data-i="x.folder">Choose a folder…</button>
+        <button type="button" class="btn big" id="xExample" data-i="x.example">Try an example</button>
+      </div>
+      <p class="fine" id="xHint"><span data-i="x.hint">Drag files here, click this box, or use a button.</span> <span data-i="x.privacy">Your files stay on this computer. Nothing is uploaded.</span></p>
+    </div>
+
+    <div id="xBody" hidden>
+      <div id="xSkipped" class="notice" hidden></div>
+      <div class="xgrid">
+        <div class="xleft">
+          <div class="card xfiles">
+            <div class="card-h"><h3 id="xFilesT">Files</h3>
+              <div class="row small"><input type="search" id="xFilter" data-i-ph="x.search" placeholder="Search…" aria-label="Search">
+                <button type="button" class="btn small" id="xSelAll" data-i="x.all">Select all</button>
+                <button type="button" class="btn small" id="xSelNone" data-i="x.none">Select none</button>
+                <button type="button" class="btn small" id="xClear" data-i="x.clear">Remove all</button></div></div>
+            <div class="scroll xscroll"><table class="t xt" id="xList"></table></div>
+            <div id="xListMore" class="xlistmore"></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><h3 data-i="x.preview">Preview</h3><span class="fine" id="xPrevInfo"></span></div>
+            <div class="scroll"><table class="t xt xprev" id="xPrev"></table></div>
+          </div>
+        </div>
+        <aside class="xright">
+          <div class="card xout">
+            <h3 data-i="x.download">Download</h3>
+            <div class="xfmt" id="xFmt" data-fmt="xlsx" role="group" aria-label="Format"><i class="thumb" aria-hidden="true"></i>
+              <button type="button" data-fmt="xlsx" aria-pressed="true"><b data-i="x.fmt.xlsx">Excel</b><small>.xlsx</small></button>
+              <button type="button" data-fmt="csv" aria-pressed="false"><b data-i="x.fmt.csv">CSV</b><small>.csv</small></button></div>
+            <p class="fine xfmthelp" id="xFmtHelp"></p>
+            <label class="f"><span data-i="x.name">File name</span><span class="xname"><input type="text" id="xName" autocomplete="off" spellcheck="false"><em id="xExt">.xlsx</em></span></label>
+            <button type="button" class="btn primary big wide" id="xDownload" data-i="x.dl.xlsx">Download Excel file</button>
+            <div class="row small xsecond"><button type="button" class="btn small" id="xCopy" data-i="x.copy">Copy to clipboard</button><button type="button" class="btn small" id="xPdfZip" data-i="x.pdfzip">Also get the PDF reports (ZIP)</button></div>
+            <p class="xsum" id="xSummary"></p>
+          </div>
+          <div class="card">
+            <details open><summary><b data-i="x.cols">Columns</b> <span class="fine" id="xColsN"></span></summary>
+              <p class="fine" data-i="x.cols.hint">Columns that contain data are ticked for you. Change them as you like.</p>
+              <div class="seg small xcm" id="xColMode"><button type="button" data-cm="data" data-i="x.cols.data">Only columns with data</button><button type="button" data-cm="all" data-i="x.cols.all">All columns</button></div>
+              <div class="xcols" id="xCols"></div>
+            </details>
+          </div>
+          <div class="card">
+            <details><summary><b data-i="x.opts">More options</b></summary>
+              <label class="chk xopt"><input type="checkbox" id="xEff"> <span data-i="x.opt.eff">Add the pressure of the grout column (effective pressure), like the original program</span></label>
+              <div id="xEffBox" class="xeff" hidden>
+                <label class="f"><span data-i="d.density">Grout density (kg/m³)</span><input type="number" id="xDens" min="0" step="any"></label>
+                <label class="f"><span data-i="d.angle">Hole angle from the vertical (degrees)</span><input type="number" id="xAng" min="0" max="90" step="any"></label>
+                <label class="f"><span data-i="d.water">Ground water depth (m, 0 = none)</span><input type="number" id="xWat" min="0" step="any"></label>
+              </div>
+              <label class="chk xopt"><input type="checkbox" id="xTotals"> <span data-i="x.opt.totals">Add a totals row at the end</span></label>
+              <label class="f"><span data-i="x.opt.sort">Order of the rows</span><select id="xSort"><option value="date" data-i="x.sort.date">By date</option><option value="name" data-i="x.sort.name">By borehole</option><option value="none" data-i="x.sort.none">As added</option></select></label>
+              <label class="f"><span data-i="x.opt.dec">Decimal mark in CSV and copied text</span><select id="xDec"><option value="," data-i="x.dec.comma">Comma (1,5)</option><option value="." data-i="x.dec.dot">Point (1.5)</option></select></label>
+            </details>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <p class="xswitch"><span data-i="x.tipreports">Want to look at the curves or print a report instead?</span> <button type="button" class="linkbtn" id="xToReports" data-i="x.openreports">Open reports</button></p>
+  </section>
+
   <!-- Welcome / upload -->
   <section id="welcome" class="welcome">
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose files">
@@ -37,6 +112,7 @@
         <button type="button" class="btn big" id="sampleBtn" data-i="welcome.example">Try an example</button></div>
       <p class="fine" data-i="welcome.privacy">Your files stay on this computer. Nothing is uploaded.</p>
     </div>
+    <p class="xswitch"><span data-i="x.tipexcel">Need an Excel file from many files?</span> <button type="button" class="linkbtn" id="wToExcel" data-i="x.openexcel">Excel export</button></p>
     <ul class="steps3">
       <li><b>1</b><span data-i="steps.1">Open a file</span></li>
       <li><b>2</b><span data-i="steps.2">Check the results</span></li>
@@ -267,11 +343,13 @@
 
 <div id="printRoot" aria-hidden="true"></div>
 <div id="toast" class="toast" role="status" hidden></div>
-<input type="file" id="fileInput" accept=".dfi,.dmj,.txt,.DFI,.DMJ,.TXT" multiple hidden>
+<input type="file" id="fileInput" accept=".dfi,.dmj,.rec,.txt,.zip,.DFI,.DMJ,.REC,.TXT,.ZIP" multiple hidden>
+<input type="file" id="dirInput" webkitdirectory directory multiple hidden>
 
 <script src="js/vendor/jspdf.umd.min.js"></script>
 <script src="js/samples.js"></script>
 <script src="js/i18n.js"></script>
+<script src="js/i18n-export.js"></script>
 <script src="js/core.js"></script>
 <script src="js/draw.js"></script>
 <script src="js/report.js"></script>
@@ -279,6 +357,10 @@
 <script src="js/original2.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/zip.js"></script>
+<script src="js/intake.js"></script>
+<script src="js/xlsx.js"></script>
+<script src="js/export.js"></script>
+<script src="js/exporter.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
