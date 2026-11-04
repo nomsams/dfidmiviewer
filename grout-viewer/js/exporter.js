@@ -19,7 +19,7 @@
   /* the whole table for the ticked files; cols = the chosen columns */
   function compute() {
     const sel = rowsOf().filter((e) => !X.off.has(e.id));
-    const full = G.exportModel(sel.map(itemOf), { eff: effOpt(), sort: xp().sort, totals: xp().totals });
+    const full = G.exportModel(sel.map(itemOf), { eff: effOpt(), compat: xp().compat, sort: xp().sort, totals: xp().totals });
     const p = xp();
     const keys = p.colMode === 'all' ? G.exportKeys.slice() : p.colMode === 'custom' ? G.exportKeys.filter((k) => p.custom.indexOf(k) >= 0) : G.exportKeys.filter((k) => full.hasData[k]);
     X.model = Object.assign(G.exportPick(full, keys), { hasData: full.hasData, selected: sel.length });
@@ -78,7 +78,7 @@
 
   function renderOpts() {
     const p = xp(), O = X.api.S.opt.o;
-    $('#xEff').checked = !!p.eff; $('#xEffBox').hidden = !p.eff; $('#xDens').value = O.density; $('#xAng').value = O.angle; $('#xWat').value = O.waterDepth;
+    $('#xEff').checked = !!p.eff; $('#xCompat').checked = !!p.compat; $('#xEffBox').hidden = !p.eff; $('#xDens').value = O.density; $('#xAng').value = O.angle; $('#xWat').value = O.waterDepth;
     $('#xTotals').checked = !!p.totals; $('#xSort').value = p.sort; $('#xDec').value = p.dec;
   }
 
@@ -154,7 +154,7 @@
         const cur = new Set((X.model || compute()).keys); if (el.checked) cur.add(el.dataset.col); else cur.delete(el.dataset.col);
         p.custom = G.exportKeys.filter((k) => cur.has(k)); p.colMode = 'custom'; api.save(); refresh(); return;
       }
-      const set = { xEff: () => { p.eff = el.checked; }, xTotals: () => { p.totals = el.checked; }, xSort: () => { p.sort = el.value; }, xDec: () => { p.dec = el.value; },
+      const set = { xEff: () => { p.eff = el.checked; }, xTotals: () => { p.totals = el.checked; }, xCompat: () => { p.compat = el.checked; }, xSort: () => { p.sort = el.value; }, xDec: () => { p.dec = el.value; },
         xDens: () => { S.opt.o.density = Math.max(0, parseFloat(el.value) || 0); }, xAng: () => { S.opt.o.angle = Math.min(90, Math.max(0, parseFloat(el.value) || 0)); }, xWat: () => { S.opt.o.waterDepth = Math.max(0, parseFloat(el.value) || 0); } }[el.id];
       if (set) { set(); api.save(); renderOpts(); refresh(); }
     });

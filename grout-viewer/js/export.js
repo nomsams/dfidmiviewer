@@ -17,7 +17,19 @@
   const pn = (s) => { const n = G.parseNumber(s); return isNum(n) ? n : NaN; };
   const hms = (sec) => (isNum(sec) ? G.fmtHMS(Math.max(0, sec)) : ''); // whole seconds are cut, not rounded, as in the original
 
-  /* One typed row (object by column key). o: { eff: { density, angle, waterDepth } to add the grout column pressure like the original (or null), groutIdx: { name: n } } */
+  /* The original program averages pressures from a table that holds them in tenths of a bar: every reading is rounded to 0.1 bar (halves to the
+     even digit, as .NET does) before the mean is taken. Its 30 s value is not the plain last 30 readings; across 83 real exports the mean of the 29
+     readings that precede the final record reproduces it far more often (see RE-NOTES), and its grout-column offset there is 9.81 m/s2 based (0.0981 bar
+     per metre of water) where the mean uses 0.1 bar per metre. With few readings everything before the last one is used. */
+  const tenth = (p) => { const y = p * 10, r = Math.round(y); return (Math.abs(Math.abs(y) % 1 - 0.5) < 1e-9 && r % 2 ? r - 1 : r) / 10; };
+  function tablePressures(S) {
+    const N = S.length; if (!N) return { avg: NaN, p30: NaN };
+    const q = S.map((s) => tenth(s.pBar)), mean = (a, b) => { let t = 0; for (let i = a; i < b; i++) t += q[i]; return t / (b - a); };
+    const avg = mean(0, N), e = N - 1, a = Math.max(0, e - 29);
+    return { avg, p30: e > a ? mean(a, e) : avg };
+  }
+
+  /* One typed row (object by column key). o: { eff: { density, angle, waterDepth } to add the grout column pressure like the original (or null), groutIdx: { name: n }, compat: true to average pressures like the original } */
   function exportRow(item, o) {
     o = o || {};
     const rec = item.rec, st = item.st || {}, hdr = item.hdr || {};
@@ -28,6 +40,7 @@
     const hl = (() => { const v = pn(rec.meta.headLoss); return isNum(v) && v > 0 ? r2(v / 1e5) : 0; })(); // the file stores it in Pa; the export in bar
     const off = o.eff ? G._o.effOffset({ top: String(topL), bottom: String(botL) }, o.eff) : 0;
     const gname = (hdr.grout || '').trim(), gidx = o.groutIdx && gname ? o.groutIdx[gname.toLowerCase()] : 1;
+    const tp = o.compat ? tablePressures(rec.samples) : null, avgP = tp ? tp.avg : st.avgP, p30 = tp ? tp.p30 : st.p30;
     const press = (v, add) => (isNum(v) ? Math.max(0, r2(v + (add || 0) - hl)) : '');
     const vol = r2(st.vol);
     const sleeve = parseInt(hdr.sleeve, 10);
@@ -35,13 +48,13 @@
       Start_date: rs.slice(0, 10), Borehole: hdr.job || '', Fan: hdr.fan || '', Sleeve: Number.isFinite(sleeve) ? sleeve : 1, Regrout: 1, Grout: gidx || 1, Zone: hdr.zone || '',
       X_coord: 0, Y_coord: 0, Pump: hdr.pump || 'P1', Start_time: rs.slice(11, 19), End_time: re.slice(11, 19),
       Total_duration: hms(st.durTotal), Grouting_duration: hms(st.durMeas), Top_level: r2(topL), Bottom_level: r2(botL), Injected_volume: vol,
-      Average_pressure: press(st.avgP, off), '30s_pressure': press(st.p30, off), End_pressure: press(st.endP, 0),
-      Average_flowrate: r2(st.avgQ), '30s_flowrate': r2(st.q30), End_flowrate: r2(st.endQ), Stop_type: st.stopType || '',
+      Average_pressure: press(avgP, off), '30s_pressure': press(p30, o.compat ? off * 0.981 : off), End_pressure: press(st.endP, 0),
+      Average_flowrate: isNum(st.avgQ) ? r2(st.avgQ) : 0, '30s_flowrate': r2(st.q30), End_flowrate: r2(st.endQ), Stop_type: st.stopType || 'Manu_Operator', // a record with no stop event is a manual stop by the operator; no grouting time gives a flow of 0
       Dry_weights: vol, Coeff_Headloss: 0, Head_loss: hl, Water_depth: 0, Inclination: '',
     };
   }
 
-  /* items: [{ rec, st, hdr }]. o: { eff: { density, angle, waterDepth } or null, sort: 'date' | 'name' | 'none', totals }. */
+  /* items: [{ rec, st, hdr }]. o: { eff: { density, angle, waterDepth } or null, compat, sort: 'date' | 'name' | 'none', totals }. */
   function exportModel(items, o) {
     o = o || {};
     const list = items.slice();
@@ -52,7 +65,7 @@
     /* grout numbers in order of first appearance, like the grout table of the original */
     const groutIdx = {}; let n = 0;
     list.forEach((i) => { const g = (i.hdr.grout || '').trim().toLowerCase(); if (g && !groutIdx[g]) groutIdx[g] = ++n; });
-    const objs = list.map((i) => exportRow(i, { eff: o.eff || null, groutIdx }));
+    const objs = list.map((i) => exportRow(i, { eff: o.eff || null, groutIdx, compat: !!o.compat }));
     const hasData = {};
     KEYS.forEach((k) => { hasData[k] = objs.some((r) => r[k] !== '' && r[k] !== null && r[k] !== undefined); });
     const keys = KEYS.slice(), cols = COLS.slice();

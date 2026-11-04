@@ -190,3 +190,20 @@ test('the text of the export view exists in every language', () => {
   for (const l of ['sv', 'fr', 'no']) { const miss = keys.filter((k) => !(k in G.DICT[l])); assert.deepEqual(miss, [], l); }
   G.exportKeys.forEach((k) => assert.ok(G.DICT.en['xc.' + k], 'caption for ' + k));
 });
+
+test('original-compatible rounding: pressures averaged in tenths of a bar bring the example rows closer; defaults of the original for records without injection', () => {
+  const eff = { density: 1000, angle: 0, waterDepth: 0 };
+  const plain = G.exportModel(items(), { eff, sort: 'date' }).objs, compat = G.exportModel(items(), { eff, compat: true, sort: 'date' }).objs;
+  const want = [[2.15, 2.13], [2.24, 1.78]], miss = (rows) => rows.reduce((n, r, i) => n + (r.Average_pressure !== want[i][0]) + (r['30s_pressure'] !== want[i][1]), 0);
+  assert.ok(miss(compat) < miss(plain), 'fewer of the four mean pressures differ from the original (' + miss(compat) + ' against ' + miss(plain) + ')');
+  assert.equal(compat[0].Average_pressure, 2.15); assert.equal(compat[1].Average_pressure, 2.24); assert.equal(compat[1]['30s_pressure'], 1.78);
+  assert.ok(Math.abs(compat[0]['30s_pressure'] - 2.13) <= 0.011);
+  assert.deepEqual(compat.map((r) => r.End_pressure), plain.map((r) => r.End_pressure), 'end pressure is never rounded or corrected');
+  /* a record without any stop event: the original calls it a manual stop by the operator and gives a flow of 0 */
+  const head = 'RecordStart\t\t2026-01-01T10:00:00.000\t0\t0\t100000\t0\t0\n\t\t\t000D0080\t000F0080\t93000780\t93000540\t93000500\n\t\t\ts\ts\tPa\tm3/s\tm3\n';
+  const row = (tt, p) => '\t\t\t' + tt + '\t0\t' + p + '\t0\t0\n';
+  const rec = G.parseBuffer('REC.TXT', new TextEncoder().encode(head + [0, 0, 0, 0, 5, 5].map((t, i) => row(t, i < 4 ? 34492 : 28290)).join('') + 'RecordStop\t\t2026-01-01T10:03:00.000\n').buffer);
+  const r = G.exportRow(itemOf(rec, {}), { eff, compat: true });
+  assert.equal(r.Stop_type, 'Manu_Operator'); assert.equal(r.Average_flowrate, 0); assert.equal(r.Injected_volume, 0);
+  assert.equal(r.Average_pressure, 0.4, 'all readings round to 0.3 bar, plus 0.1 for the grout column'); assert.equal(r['30s_pressure'], 0.4);
+});

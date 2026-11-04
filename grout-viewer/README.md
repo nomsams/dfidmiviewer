@@ -10,7 +10,7 @@ Open `index.html` in a browser (double-click works), or serve the folder with an
 **Excel export (default)** – one spreadsheet from many measurement files:
 1. Add files in any of three ways: **drag and drop** them (or a whole folder, or a `.zip`), **click the box**, or press **Choose files…** / **Choose a folder…**. A hundred files or more are fine (720 were tried; reading is sliced so the page stays responsive and shows progress). The same file added twice is skipped.
 2. Tick the files to include, choose the columns (the ones that contain data are ticked for you; *All columns* gives the original's 29), and optionally add a totals row, sort the rows, or add the effective pressure.
-3. Slide the switch between **Excel (.xlsx)** (default) and **CSV**, then **Download**. The CSV is the original program's *Site > Export > Field separator > Semicolon* file (header, `;`, decimal comma, one row per file). You can also copy the table to the clipboard or get all PDF reports as a ZIP.
+3. Slide the switch between **Excel (.xlsx)** (default) and **CSV**, then **Download**. The CSV is the original program's *Site > Export > Field separator > Semicolon* file (header, `;`, decimal comma, one row per file). You can also copy the table to the clipboard or get all PDF reports as a ZIP. *More options* has **same rounding as the original program** (on by default): checked against 83 real exports, all columns match except the two mean pressures, which match to within 0.01 bar in most rows (55 of 83 rows are identical; see RE-NOTES).
 
 **Reports mode** – for people who just want to read and print one file:
 1. Drag a `.DFI` file onto the page (or *Choose file…*, or *Try an example*).

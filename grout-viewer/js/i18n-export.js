@@ -9,6 +9,7 @@
   };
   const T = {
     en: {
+      'x.opt.compat': 'Same rounding as the original program (pressures are averaged in steps of 0.1 bar)',
       'x.empty': 'No injection recorded',
       'warn.counterReset': 'A time or volume counter stepped backwards during the recording (for example after a reset). The curves continue from the earlier value.',
       'gate.sub': 'Enter the password to use this tool.', 'gate.pw': 'Password', 'gate.unlock': 'Unlock', 'gate.wrong': 'Wrong password', 'gate.lock': 'Lock the tool', 'nav.pq': 'Open PQ-Registration (pqview)',
@@ -33,6 +34,7 @@
       ...Object.fromEntries(Object.entries(COL.en).map(([k, v]) => ['xc.' + k, v])),
     },
     sv: {
+      'x.opt.compat': 'Samma avrundning som originalprogrammet (tryck medelvärdesbildas i steg om 0,1 bar)',
       'x.empty': 'Ingen injektering registrerad',
       'warn.counterReset': 'En tid- eller volymräknare gick bakåt under registreringen (till exempel efter en nollställning). Kurvorna fortsätter från det tidigare värdet.',
       'gate.sub': 'Ange lösenordet för att använda verktyget.', 'gate.pw': 'Lösenord', 'gate.unlock': 'Lås upp', 'gate.wrong': 'Fel lösenord', 'gate.lock': 'Lås verktyget', 'nav.pq': 'Öppna PQ-Registration (pqview)',
@@ -57,6 +59,7 @@
       ...Object.fromEntries(Object.entries(COL.sv).map(([k, v]) => ['xc.' + k, v])),
     },
     fr: {
+      'x.opt.compat': 'Même arrondi que le programme d’origine (pressions moyennées par pas de 0,1 bar)',
       'x.empty': 'Aucune injection enregistrée',
       'warn.counterReset': 'Un compteur de temps ou de volume a reculé pendant l’enregistrement (par exemple après une remise à zéro). Les courbes continuent à partir de la valeur précédente.',
       'gate.sub': 'Saisissez le mot de passe pour utiliser cet outil.', 'gate.pw': 'Mot de passe', 'gate.unlock': 'Déverrouiller', 'gate.wrong': 'Mot de passe incorrect', 'gate.lock': 'Verrouiller l’outil', 'nav.pq': 'Ouvrir PQ-Registration (pqview)',
@@ -81,6 +84,7 @@
       ...Object.fromEntries(Object.entries(COL.fr).map(([k, v]) => ['xc.' + k, v])),
     },
     no: {
+      'x.opt.compat': 'Samme avrunding som originalprogrammet (trykk midles i trinn på 0,1 bar)',
       'x.empty': 'Ingen injisering registrert',
       'warn.counterReset': 'En tid- eller volumteller gikk bakover under registreringen (for eksempel etter en nullstilling). Kurvene fortsetter fra den tidligere verdien.',
       'gate.sub': 'Skriv inn passordet for å bruke verktøyet.', 'gate.pw': 'Passord', 'gate.unlock': 'Lås opp', 'gate.wrong': 'Feil passord', 'gate.lock': 'Lås verktøyet', 'nav.pq': 'Åpne PQ-Registration (pqview)',

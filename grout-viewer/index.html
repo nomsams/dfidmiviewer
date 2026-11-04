@@ -93,6 +93,7 @@
                 <label class="f"><span data-i="d.angle">Hole angle from the vertical (degrees)</span><input type="number" id="xAng" min="0" max="90" step="any"></label>
                 <label class="f"><span data-i="d.water">Ground water depth (m, 0 = none)</span><input type="number" id="xWat" min="0" step="any"></label>
               </div>
+              <label class="chk xopt"><input type="checkbox" id="xCompat"> <span data-i="x.opt.compat">Same rounding as the original program (pressures are averaged in steps of 0.1 bar)</span></label>
               <label class="chk xopt"><input type="checkbox" id="xTotals"> <span data-i="x.opt.totals">Add a totals row at the end</span></label>
               <label class="f"><span data-i="x.opt.sort">Order of the rows</span><select id="xSort"><option value="date" data-i="x.sort.date">By date</option><option value="name" data-i="x.sort.name">By borehole</option><option value="none" data-i="x.sort.none">As added</option></select></label>
               <label class="f"><span data-i="x.opt.dec">Decimal mark in CSV and copied text</span><select id="xDec"><option value="," data-i="x.dec.comma">Comma (1,5)</option><option value="." data-i="x.dec.dot">Point (1.5)</option></select></label>
