@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 const win = {}; new Function('window', 'navigator', fs.readFileSync(new URL('../js/i18n.js', import.meta.url), 'utf8'))(win, { language: 'en' });
 new Function('window', fs.readFileSync(new URL('../js/i18n-export.js', import.meta.url), 'utf8'))(win);const G = win.G, en = Object.keys(G.DICT.en);
-const src = ['js/report.js','js/app.js','js/chart.js','js/exporter.js','js/export.js','index.html'].map(f => fs.readFileSync(new URL('../'+f, import.meta.url), 'utf8')).join('\n');
+const src = ['js/report.js','js/app.js','js/chart.js','js/exporter.js','js/export.js','js/gate.js','index.html'].map(f => fs.readFileSync(new URL('../'+f, import.meta.url), 'utf8')).join('\n');
 const used = new Set([...src.matchAll(/\bt\('([\w.]+)'/g)].map(m => m[1]));
-[...src.matchAll(/data-i(?:-ph)?="([\w.]+)"/g)].forEach(m => used.add(m[1]));
+[...src.matchAll(/data-i(?:-ph|-title)?="([\w.]+)"/g)].forEach(m => used.add(m[1]));
 ['p','q','v'].forEach(k=>used.add('cv.'+k));
 ['overview','chart','data','events','params','report','summary','export'].forEach(k=>used.add('tab.'+k));
 ['auto','light','dark','forest','ocean','sunset','contrast'].forEach(k=>used.add('theme.'+k));

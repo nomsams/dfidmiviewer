@@ -8,7 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Cpath d='M5 22 11 14l5 5 6-9 5 7' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/app.css">
 </head>
-<body data-theme="auto" data-mode="export">
+<body class="locked" data-theme="auto" data-mode="export">
 
 <header class="top">
   <div class="brand">
@@ -21,6 +21,8 @@
     <button type="button" data-mode="simple" data-i="mode.simple">Reports</button>
     <button type="button" data-mode="advanced" data-i="mode.advanced">Advanced</button>
   </div>
+  <a class="iconbtn" id="pqLink" href="https://nomsams.github.io/pqview/" data-i-title="nav.pq" title="Open PQ-Registration (pqview)" aria-label="Open PQ-Registration (pqview)"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 18a8 8 0 1 1 16 0" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 18l4-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="18" r="1.6" fill="currentColor"/></svg></a>
+  <button type="button" class="iconbtn" id="lockBtn" data-i-title="gate.lock" title="Lock" aria-label="Lock"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
   <label class="sel"><span class="sr" data-i="ui.theme">Theme</span>
     <select id="themeSel"></select></label>
   <label class="sel"><span class="sr" data-i="ui.language">Language</span>
@@ -343,6 +345,18 @@
 
 <div id="printRoot" aria-hidden="true"></div>
 <div id="toast" class="toast" role="status" hidden></div>
+
+<!-- Password gate (same mechanism as the pqview project) -->
+<div id="gate" class="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+  <form id="gateForm" class="gate-box" autocomplete="off">
+    <svg viewBox="0 0 32 32" width="40" height="40" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><rect x="9" y="14.5" width="14" height="9.5" rx="2" fill="none" stroke="var(--accent-t)" stroke-width="2"/><path d="M12 14.5v-2.5a4 4 0 0 1 8 0v2.5" fill="none" stroke="var(--accent-t)" stroke-width="2" stroke-linecap="round"/></svg>
+    <h2 id="gateTitle" data-i="app.name">Grout Report Viewer</h2>
+    <p data-i="gate.sub">Enter the password to use this tool.</p>
+    <input type="password" id="gatePw" autocomplete="off" autocapitalize="off" spellcheck="false" data-i-title="gate.pw" title="Password" aria-label="Password" required>
+    <button type="submit" class="btn primary big" data-i="gate.unlock">Unlock</button>
+    <p id="gateErr" class="gate-err" role="alert" hidden data-i="gate.wrong">Wrong password</p>
+  </form>
+</div>
 <input type="file" id="fileInput" accept=".dfi,.dmj,.rec,.txt,.zip,.DFI,.DMJ,.REC,.TXT,.ZIP" multiple hidden>
 <input type="file" id="dirInput" webkitdirectory directory multiple hidden>
 
@@ -350,6 +364,7 @@
 <script src="js/samples.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/i18n-export.js"></script>
+<script src="js/gate.js"></script>
 <script src="js/core.js"></script>
 <script src="js/draw.js"></script>
 <script src="js/report.js"></script>

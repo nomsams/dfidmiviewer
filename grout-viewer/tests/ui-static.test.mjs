@@ -31,7 +31,7 @@ test('every data-opt / data-ov path in the designer exists in the defaults', asy
 
 test('scripts are classic scripts (no modules, no network) so the page also works from disk', () => {
   assert.equal(/type="module"/.test(html), false);
-  assert.equal(/\b(?:src|href)="https?:/.test(html), false);
+  assert.equal(/<(?:script|link|img|iframe)\b[^>]*\b(?:src|href)="https?:/.test(html), false, 'nothing is loaded from the network; the only outside address is the pqview link');
   const order = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
   for (const f of order) assert.ok(fs.existsSync(path.join(root, f)), f + ' exists');
   assert.ok(order.indexOf('js/original.js') > order.indexOf('js/report.js') && order.indexOf('js/app.js') > order.indexOf('js/original.js'));

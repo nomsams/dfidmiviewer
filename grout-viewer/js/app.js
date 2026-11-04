@@ -150,6 +150,7 @@
   function applyI18n() {
     $$('[data-i]').forEach((el) => { el.textContent = t(el.dataset.i); });
     $$('[data-i-ph]').forEach((el) => { el.placeholder = t(el.dataset.iPh); });
+    $$('[data-i-title]').forEach((el) => { el.title = t(el.dataset.iTitle); el.setAttribute('aria-label', el.title); });
     document.documentElement.lang = G.lang;
     $('#themeSel').innerHTML = THEMES.map((k) => '<option value="' + k + '"' + (k === S.theme ? ' selected' : '') + '>' + esc(t('theme.' + k)) + '</option>').join('');
     $('#langSel').innerHTML = Object.keys(G.LANGS).map((k) => '<option value="' + k + '"' + (k === G.lang ? ' selected' : '') + '>' + esc(G.LANGS[k]) + '</option>').join('');
@@ -499,6 +500,7 @@
     $('#fileInput').onchange = (ev) => { addFiles(Array.from(ev.target.files)); ev.target.value = ''; };
     $('#dirInput').onchange = (ev) => { addFiles(Array.from(ev.target.files).map((f) => G.intake.describe(f, true))); ev.target.value = ''; };
     $('#wToExcel').onclick = () => setMode('export');
+    $('#lockBtn').onclick = () => { if (G.gate && G.gate.lock) G.gate.lock(); };
     G.exporter.init({
       S, isUpdate, ovOf, toast, downloadBlob, setMode, save: savePrefs,
       pick: () => $('#fileInput').click(), pickDir: () => $('#dirInput').click(), samples: loadSamples, remove: removeEntry, clear: clearAll,
@@ -511,6 +513,7 @@
     window.addEventListener('dragleave', (ev) => { if (!ev.relatedTarget) over(false); });
     window.addEventListener('drop', (ev) => {
       ev.preventDefault(); over(false);
+      if (G.gate && G.gate.locked && G.gate.locked()) return; // nothing is read before the password is entered
       if (ev.dataTransfer && (ev.dataTransfer.files.length || (ev.dataTransfer.items && ev.dataTransfer.items.length))) G.intake.fromDrop(ev.dataTransfer).then(addFiles).catch((e) => { console.error(e); toast(t('err.unknown')); });
     });
 

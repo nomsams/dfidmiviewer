@@ -107,3 +107,6 @@ Read **RE-NOTES.md** before relying on the numbers. In short:
 * An unnamed grout prints the original's own literal default, **"Unknow"** (it is spelled that way in the original's code).
 
 No warranty; verify printed values before relying on them.
+
+## Password
+The page opens behind a password gate (same mechanism as the pqview project: SHA-256 hash of the typed password, case ignored). Signing in is remembered for the browser tab and shares the unlock flag (`sessionStorage` key `pq.unlocked`) with pqview, which lives on the same site, so one sign-in opens both when you follow the gauge icon in the top bar. The padlock icon locks the tool again. This runs in the browser, so it keeps casual visitors out but is not real security; measurement files never leave your computer either way.

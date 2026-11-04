@@ -9,6 +9,7 @@
   };
   const T = {
     en: {
+      'gate.sub': 'Enter the password to use this tool.', 'gate.pw': 'Password', 'gate.unlock': 'Unlock', 'gate.wrong': 'Wrong password', 'gate.lock': 'Lock the tool', 'nav.pq': 'Open PQ-Registration (pqview)',
       'mode.export': 'Excel export', 'mode.simple': 'Reports',
       'x.title': 'Make an Excel file from your measurements', 'x.sub': 'Drop one or many .DFI files here. Whole folders and .zip files work too.',
       'x.hint': 'Drag files here, click this box, or use a button.', 'x.choose': 'Choose files…', 'x.folder': 'Choose a folder…', 'x.example': 'Try an example',
@@ -30,6 +31,7 @@
       ...Object.fromEntries(Object.entries(COL.en).map(([k, v]) => ['xc.' + k, v])),
     },
     sv: {
+      'gate.sub': 'Ange lösenordet för att använda verktyget.', 'gate.pw': 'Lösenord', 'gate.unlock': 'Lås upp', 'gate.wrong': 'Fel lösenord', 'gate.lock': 'Lås verktyget', 'nav.pq': 'Öppna PQ-Registration (pqview)',
       'mode.export': 'Excel-export', 'mode.simple': 'Rapporter',
       'x.title': 'Gör en Excel-fil av dina mätningar', 'x.sub': 'Släpp en eller flera .DFI-filer här. Hela mappar och .zip-filer fungerar också.',
       'x.hint': 'Dra filer hit, klicka i rutan eller använd en knapp.', 'x.choose': 'Välj filer…', 'x.folder': 'Välj en mapp…', 'x.example': 'Prova ett exempel',
@@ -51,6 +53,7 @@
       ...Object.fromEntries(Object.entries(COL.sv).map(([k, v]) => ['xc.' + k, v])),
     },
     fr: {
+      'gate.sub': 'Saisissez le mot de passe pour utiliser cet outil.', 'gate.pw': 'Mot de passe', 'gate.unlock': 'Déverrouiller', 'gate.wrong': 'Mot de passe incorrect', 'gate.lock': 'Verrouiller l’outil', 'nav.pq': 'Ouvrir PQ-Registration (pqview)',
       'mode.export': 'Export Excel', 'mode.simple': 'Rapports',
       'x.title': 'Créer un fichier Excel à partir de vos mesures', 'x.sub': 'Déposez un ou plusieurs fichiers .DFI ici. Les dossiers entiers et les fichiers .zip fonctionnent aussi.',
       'x.hint': 'Glissez des fichiers ici, cliquez sur ce cadre ou utilisez un bouton.', 'x.choose': 'Choisir des fichiers…', 'x.folder': 'Choisir un dossier…', 'x.example': 'Essayer un exemple',
@@ -72,6 +75,7 @@
       ...Object.fromEntries(Object.entries(COL.fr).map(([k, v]) => ['xc.' + k, v])),
     },
     no: {
+      'gate.sub': 'Skriv inn passordet for å bruke verktøyet.', 'gate.pw': 'Passord', 'gate.unlock': 'Lås opp', 'gate.wrong': 'Feil passord', 'gate.lock': 'Lås verktøyet', 'nav.pq': 'Åpne PQ-Registration (pqview)',
       'mode.export': 'Excel-eksport', 'mode.simple': 'Rapporter',
       'x.title': 'Lag en Excel-fil av målingene dine', 'x.sub': 'Slipp én eller flere .DFI-filer her. Hele mapper og .zip-filer fungerer også.',
       'x.hint': 'Dra filer hit, klikk i ruten eller bruk en knapp.', 'x.choose': 'Velg filer…', 'x.folder': 'Velg en mappe…', 'x.example': 'Prøv et eksempel',
