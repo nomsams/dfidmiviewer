@@ -10,7 +10,7 @@ Open `index.html` in a browser (double-click works), or serve the folder with an
 **Excel export (default)** – one spreadsheet from many measurement files:
 1. Add files in any of three ways: **drag and drop** them (or a whole folder, or a `.zip`), **click the box**, or press **Choose files…** / **Choose a folder…**. A hundred files or more are fine (720 were tried; reading is sliced so the page stays responsive and shows progress). The same file added twice is skipped.
 2. Tick the files to include, choose the columns (the ones that contain data are ticked for you; *All columns* gives the original's 29), and optionally add a totals row, sort the rows, or add the effective pressure.
-3. Slide the switch between **Excel (.xlsx)** (default) and **CSV**, then **Download**. The CSV is the original program's *Site > Export > Field separator > Semicolon* file (header, `;`, decimal comma, one row per file). You can also copy the table to the clipboard or get all PDF reports as a ZIP. *More options* has **same rounding as the original program** (on by default): checked against 83 real exports, all columns match except the two mean pressures, which match to within 0.01 bar in most rows (55 of 83 rows are identical; see RE-NOTES).
+3. Slide the switch between **Excel (.xlsx)** (default) and **CSV**, then **Download**. The CSV is the original program's *Site > Export > Field separator > Semicolon* file (header, `;`, decimal comma, one row per file). You can also copy the table to the clipboard or get all PDF reports as a ZIP. *More options* has **Use the original program’s pressure calculations** (on by default). With the default effective-pressure settings, every column matches all 83 reference rows; the full CSV also matches the original export byte for byte when the same row order and columns are selected. The pressure calculations are decoded from native instructions (see RE-NOTES).
 
 **Reports mode** – for people who just want to read and print one file:
 1. Drag a `.DFI` file onto the page (or *Choose file…*, or *Try an example*).
@@ -59,7 +59,9 @@ The original prints through *LutzPDF* (PostScript → Ghostscript → PDF 1.3 pr
 * **Modern** – portrait page with one centimetre-grid diagram holding all curves.
 * **Cards** – dashboard-style page with KPI cards.
 
-Preview, browser printing and the PDF file are produced by **the same drawing code** (SVG for screen/print, jsPDF for the file), so they match. PDFs contain every sample (no decimation, no row caps).
+Preview, browser printing and the PDF file share drawing geometry (SVG for screen/print, jsPDF for the file). For the closest typography to the original specimens on Windows, choose **Original → Print → Save as PDF**: browser printing uses installed Arial. The direct **Save as PDF** button uses standard Helvetica. PDFs retain every plotted sample without decimation or row caps.
+
+The current specimen checks cover all 363 pressure/volume and penetrability endpoints and all 360 pressure/time segments, with coordinate differences below **0.05 mm**. The web page and both PDF actions also work from `file://` without network requests. This verifies the supplied single-sleeve examples; it does not establish identical output for every print setting.
 
 ## Themes and languages
 Automatic (follows the OS), Light, Dark, Forest, Ocean, Sunset, High contrast. English, Svenska, Français, Norsk. Choices are remembered in the browser.
@@ -74,10 +76,12 @@ Automatic (follows the OS), Light, Dark, Forest, Ocean, Sunset, High contrast. E
 ## Development
 
 ```
-npm test               # 35 tests, Node >= 20, no dependencies
+npm test               # Node >= 20, no dependencies; optional private fidelity test below
 npm run serve          # tiny static server on http://localhost:8123 (dev only)
 node tools/check-i18n.mjs
 ```
+
+To include the private 83-row fidelity check, set `GROUT_FIDELITY_DFI_DIR` to the local DFI folder and `GROUT_FIDELITY_CSV` to the original export, then run `npm test`. Without those paths that integration test is skipped; synthetic regression tests still cover the native pressure rules. Private files must stay outside git.
 
 ```
 index.html            page shell
@@ -102,8 +106,8 @@ RE-NOTES.md           what was learned from the original software, and what is s
 Read **RE-NOTES.md** before relying on the numbers. In short:
 
 * File format, units, checksums and the statistics formulas come from the original import code and reproduce the original for volume, durations, end pressure, average flow and stop type.
-* The original's *average* and *30 s* pressure for the two sample holes are ≈0.1 bar above the raw-sample values. This is very likely its *effective pressure* (grout column). The option exists (off by default, as in the original); the exact density/level used by the original for those holes is unknown, so it is not applied automatically.
-* The volume-distribution and water-test (Lugeon) pages are interpretations of the original's menus (no specimen); the Lugeon logic of the original is native code that could not be read, so stages are detected here from events or pressure plateaus.
+* Export compatibility calculations reproduce all 83 original rows, including both pressure means. The native program quantizes readings, replaces the final sampled pressure with the reported end pressure, applies the effective-pressure correction to each reading, and accumulates in single precision. The export defaults to this calculation and effective pressure (1000 kg/m³, vertical, no ground water). These defaults are verified for the available specimens, not every possible site configuration.
+* The volume-distribution and water-test (Lugeon) pages are interpretations of the original's menus (no specimen). The native Lugeon formula is decoded; the stage-selection and page layout still need verification, so stages are detected here from events or pressure plateaus.
 * Only one-sleeve printouts were available. Multi-sleeve pages, other stop types and the depth report with several sleeves follow the same rules but are not verified against real prints.
 * An unnamed grout prints the original's own literal default, **"Unknow"** (it is spelled that way in the original's code).
 

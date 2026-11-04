@@ -108,7 +108,10 @@
     const hasHy = opt.o.lug.staticM > 0, hydroBar = (opt.o.lug.staticM || 0) * 0.0981;
     const cols = [[t('o.lug.stage'), 16, 'left'], [t('o.lug.start'), 24, 'right'], [t('o.lug.dur'), 28, 'right']].concat(hasSet ? [[t('o.lug.set'), 30, 'right']] : [], [[t('o.lug.p'), 34, 'right']], hasHy ? [[t('o.lug.hydro'), 40, 'right']] : [], [[t('o.lug.q'), 34, 'right'], [t('o.lug.vol'), 28, 'right'], [t('o.lug.pq'), 30, 'right'], [t('o.lug.l'), hasSet ? 38 : 54, 'right']]);
     const sumW = cols.reduce((n, c) => n + c[1], 0); if (sumW > x1 - x0) cols.forEach((c) => { c[1] = c[1] * (x1 - x0) / sumW; }); // never wider than the chart
-    const tw = cols.reduce((n, c) => n + c[1], 0), tx = x0, rh = 5.6, perPage = 11;
+    const tw = cols.reduce((n, c) => n + c[1], 0), tx = x0, rh = 5.6;
+    // Reserve room for the totals and note below the last table, including continuation pages.
+    const capacity = (y) => Math.max(1, Math.floor((GEO.frameBottom - y - rh - 1 - 16) / rh));
+    const perPage = capacity(128), continued = capacity(44);
     const drawTable = (Q, y0, rows) => {
       Q.rect(tx, y0, tw, rh + 1, { stroke: '#000', w: GEO.thin, fill: '#ececec' });
       let x = tx; cols.forEach((c) => { Q.text(G.fit(c[0], c[1] - 2, 7.4, true), c[2] === 'right' ? x + c[1] - 1.2 : x + 1.2, y0 + rh - 0.6, { size: 7.4, bold: true, align: c[2] === 'right' ? 'right' : 'left' }); x += c[1]; });
@@ -120,11 +123,11 @@
       return y0 + rh + 1 + rows.length * rh;
     };
     let yEnd = drawTable(P, 128, w.stages.slice(0, perPage));
-    for (let from = perPage; from < w.stages.length; from += 30) { // very many stages: continue on further pages
+    for (let from = perPage; from < w.stages.length; from += continued) { // very many stages: continue on further pages
       const Q = begin(doc, opt, t('o.rep.lug'), e); pages.push(Q); Q.rect(M.L, GEO.frameTop, M.R - M.L, GEO.frameBottom - GEO.frameTop, { stroke: '#000', w: GEO.frameLw });
-      yEnd = drawTable(Q, 44, w.stages.slice(from, from + 30));
+      yEnd = drawTable(Q, 44, w.stages.slice(from, from + continued));
     }
-    const L = pages[pages.length - 1], yb = Math.min(yEnd + 8, 186);
+    const L = pages[pages.length - 1], yb = yEnd + 8;
     L.text(t('o.lug.nstages') + ': ' + w.stages.length + '     ' + t('o.lug.totdur') + ': ' + G.fmtHMS(w.totalDur) + '     ' + t('o.lug.totvol') + ': ' + dec(w.totalVol, 2) + ' l     ' + t('o.lug.final') + ': ' + (isNum(w.final) ? dec(w.final, 1) : '-') + ' (l/min/m, 10 bar)', M.L + 3, yb, { size: 8.88, bold: true });
     L.text(w.stages.length ? t('o.lug.note', { len: w.length > 0 ? dec(w.length, 2) : '?', src: w.stages[0].src === 'events' ? (w.stages[0].device ? t('o.lug.src.dev') : t('o.lug.src.ev')) : t('o.lug.src.pl') }) : t('o.lug.none'), M.L + 3, yb + 5, { size: 6.8, c: GEO.grey });
     return pages;

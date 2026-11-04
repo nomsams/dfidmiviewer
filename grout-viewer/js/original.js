@@ -17,7 +17,9 @@
     time: { L: 5, R: 291.97, cell: 100.63, cols: 5, head: 9.78, footRow: 2.76 },   // header: 3 text rows, y0 = frameTop + head
     pv: { L: 6.99, R: 289.94, cell: 101.3 },
     thin: 0.132, curveLw: 0.25, grey: '#808080', limitRed: '#ff0000',
-    pvg: { x0: 27.01, x1: 280.12, yTop: 51.01, yZero: 155.96, tickOut: 2.0, tickBelow: 2.07 },
+    pvg: { x0: 27.01, x1: 280.12, yTop: 51.01, yZero: 155.96, curveZero: 155.998, tickOut: 2.0, tickBelow: 2.07 },
+    // Specimen PDF: [0.5 0.5] in a 0.75-point user space, not millimetres.
+    gridDash: [0.5 * 0.75 * 25.4 / 72, 0.5 * 0.75 * 25.4 / 72],
   };
   G.ORIGINAL = GEO;
 
@@ -84,20 +86,42 @@
     const cosA = Math.cos((O.angle || 0) * Math.PI / 180), wd = O.waterDepth || 0, grout = cosA * h * ((O.density || 1000) / 1000), water = wd !== 0 && wd < h ? cosA * (h - wd) : 0;
     return (grout - water) / 10;
   }
-  function prepare(item, opt) {
+  const even = (x) => { const lo = Math.floor(x); return x - lo === 0.5 ? lo + (lo % 2 !== 0 ? 1 : 0) : Math.round(x); };
+  /* DECODED: DPVrecord.SetMesuresBytes IL_0205-03AA quantizes pressure/flow to tenths and each positive volume
+     increment to 0.01 l. LoadBAP (0x701bc0) accumulates those increments as Singles and replaces the final pressure
+     with End_pressure. Rebuild the plotted table without modifying the raw recording or its raw-import statistics. */
+  function plotSamples(item, opt) {
+    const S = item.rec.samples, O = opt.o, f = Math.fround, tenth = f(0.1), hundredth = f(0.01);
+    const loss = f(Math.max(0, G.parseNumber(item.rec.meta.headLoss) || 0) / 1e5);
+    const top = G.parseNumber(item.hdr.top), bottom = G.parseNumber(item.hdr.bottom);
+    const off = f(effOffset({ top: isNum(top) ? String(top) : '1', bottom: isNum(bottom) ? String(bottom) : '1' }, O));
+    let volume = 0, previous = S.length ? Math.max(0, S[0].v) : 0, sumP = 0, sumEff = 0;
+    const points = S.map((s, i) => {
+      if (i) { const next = Math.max(previous, s.v, 0); volume = f(volume + f(even((next - previous) * 1e5) * hundredth)); previous = next; }
+      let p = f(even(f(s.pBar) * 10) * tenth), q = f(even(f(s.qLmin) * 10) * tenth);
+      if (i === S.length - 1 && isNum(item.st.endP)) p = f(Math.max(0, even(item.st.endP * 100) / 100 - loss));
+      else p = f(p - loss);
+      if (i === S.length - 1 && item.st.endQ > 0) q = f(even(item.st.endQ * 100) / 100);
+      const effective = f(Math.max(0, p + off)); p = Math.max(0, p);
+      sumP = f(sumP + p); sumEff = f(sumEff + effective);
+      return { p: O.sel.eff ? effective : p, q, v: volume };
+    });
+    return { points, avgP: S.length ? f(sumP / S.length) : NaN, effectiveAvgP: S.length ? f(sumEff / S.length) : NaN };
+  }
+  function prepare(item, opt, fullRecord) {
     const S = item.rec.samples; if (!S.length) return null;
     let end = S.length - 1;
-    for (let i = item.rec.events.length - 1; i >= 0; i--) if (item.rec.events[i].name === 'PumpStop') { end = Math.min(S.length - 1, Math.max(0, item.rec.events[i].idx)); break; }
+    if (!fullRecord) for (let i = item.rec.events.length - 1; i >= 0; i--) if (item.rec.events[i].name === 'PumpStop') { end = Math.min(S.length - 1, Math.max(0, item.rec.events[i].idx)); break; }
     const idx = []; for (let i = 0; i <= end; i++) idx.push(i);
-    const pts = idx.map((i) => S[i]), t0 = 0, T = pts.map((s) => s.tm), O = opt.o;
+    const pts = idx.map((i) => S[i]), t0 = 0, T = pts.map((s) => s.tm), O = opt.o, native = plotSamples(item, opt);
     const corr = O.sel.eff ? effOffset(item.hdr, O) : 0;
-    const P = pts.map((s) => s.pBar + corr), Q = pts.map((s) => s.qLmin), V = pts.map((s) => s.vL);
+    const P = idx.map((i) => native.points[i].p), Q = idx.map((i) => native.points[i].q), V = idx.map((i) => native.points[i].v);
     const sp = O.smoothP.on ? movingAverage(T, P, O.smoothP.s) : P, sq = O.smoothQ.on ? movingAverage(T, Q, O.smoothQ.s) : Q;
     const D = sp.map((p, i) => (p > 0.05 ? sq[i] / p : 0)), spu = UF === 1 ? sp : sp.map((v) => v * UF), Gn = spu.map((p, i) => p * V[i]);
     /* pressure limit per sample from the SetCons events */
     const cons = item.rec.events.filter((e) => e.name === 'SetCons').map((e) => ({ idx: e.idx, p: G.setpoints(e.data).pressureLimitBar })).filter((c) => c.p != null);
     const lim = idx.map((i) => { let v = null; for (const c of cons) if (c.idx <= i) v = c.p; if (v == null && cons.length) v = cons[0].p; return v == null ? null : v * UF; });
-    return { idx, T, series: { p: spu, q: sq, v: V, d: D, g: Gn }, lim, dur: T[T.length - 1], corr, vMax: G.maxOf(V), pMax: G.maxOf(spu), t0 };
+    return { idx, T, series: { p: spu, q: sq, v: V, d: D, g: Gn }, lim, dur: T[T.length - 1], corr, vMax: G.maxOf(V), pMax: G.maxOf(spu), avgP: native.avgP, effectiveAvgP: native.effectiveAvgP, t0 };
   }
 
   /* ---------- page furniture ---------- */
@@ -146,7 +170,7 @@
     P.text(stamp(start), cx + w / 2, 45.08, { size: 8.88, align: 'center' });
     P.line(cx, y0, cx + w, y0, th);
     /* grid: ten dashed divisions, solid centre line */
-    for (let k = 1; k <= 10; k++) P.line(cx + k * w / 10, y0, cx + k * w / 10, y0 + hPlot, { c: '#000', w: GEO.thin, dash: [0.5, 0.5] });
+    for (let k = 1; k <= 10; k++) P.line(cx + k * w / 10, y0, cx + k * w / 10, y0 + hPlot, { c: '#000', w: GEO.thin, dash: GEO.gridDash });
     P.line(cx + w / 2, y0, cx + w / 2, y0 + hPlot, th); P.line(cx + w, y0, cx + w, y0 + hPlot, th);
     /* time ticks in the page margin of the first column */
     if (showTicks) for (let k = 1; k * 10 <= hPlot + 0.01; k++) {
@@ -173,7 +197,7 @@
       if (O.sel.duration) put(G.fmtHMS(st.durMeas));
       if (O.sel.totalVol) put(dec(Math.round(d.vMax), ACC) + ' l');
       if (O.sel.volLimit) { const sp = G.setpoints(item.rec.meta.setConsRaw); if (sp.volumeLimitL != null) put('(' + trim(sp.volumeLimitL, 0) + ')', '#ff0000'); }
-      if (O.sel.avgPQ) put(dec((st.avgP + d.corr) * UF, ACC) + ' ' + PU + ' ' + dec(st.avgQ, ACC) + ' l/min');
+      if (O.sel.avgPQ) put(dec((O.sel.eff ? d.effectiveAvgP : d.avgP) * UF, ACC) + ' ' + PU + ' ' + dec(st.avgQ, ACC) + ' l/min');
       if (O.sel.finalP) put(dec(st.endP * UF, ACC) + ' ' + PU);
       if (O.sel.groutType) { const g = hdr.grout || t('o.unknown'); const wd = G.textWidth(g, 6.72); P.text(g, cx + w - wd - 0.6, base, { size: 6.72 }); }
     }
@@ -194,7 +218,7 @@
 
   /* ---------- report 2: pressure / volume / GIN ---------- */
   function pvgPage(doc, E, opt) {
-    const O = opt.o, m = GEO.pv, g = GEO.pvg, P = doc.addPage(GEO.page.w, GEO.page.h), { item, d } = E, hdr = item.hdr; P.orig = true; P.label = '';
+    const O = opt.o, m = GEO.pv, g = GEO.pvg, P = doc.addPage(GEO.page.w, GEO.page.h), item = E.item, d = prepare(item, opt, true), hdr = item.hdr; P.orig = true; P.label = '';
     pageHead(P, opt, hdr, t('o.rep.pvg'), m, item);
     P.rect(m.L, GEO.frameTop, m.R - m.L, GEO.frameBottom - GEO.frameTop, { stroke: '#000', w: GEO.frameLw });
     /* sub-title: bold centred hole, then sleeve */
@@ -214,9 +238,12 @@
     if (showD) P.text(t('o.pen'), 8.0, 41.02, { size: 8.88, bold: true, c: O.d.color });
     if (O.p.on) P.text(t('o.pressure').replace('(bar)', '(' + PU + ')'), 16.98, 45.21, { size: 8.88, bold: true });
     P.text(t('o.volume'), g.x1 - 0.13, 166.33, { size: 8.88, bold: true, align: 'right' });
-    const clip = { x: g.x0, y: g.yTop, w: W, h: H }, X = (v) => g.x0 + v / aV * W;
-    const cap = isNum(item.st.vol) && item.st.vol > 0 ? item.st.vol + 1e-6 : Infinity;
-    const line = (arr, a) => { const out = []; for (let i = 0; i < d.T.length; i++) { if (d.series.v[i] > cap) continue; out.push([X(d.series.v[i]), g.yZero - arr[i] / a * H]); } return out; };
+    // Measured in the vector specimen: curves start one 600 dpi printer dot below the grid's zero line.
+    const clip = { x: g.x0, y: g.yTop, w: W, h: g.curveZero - g.yTop }, X = (v) => g.x0 + v / aV * W;
+    // FITTED from the specimen: clamp cumulative volume to the reported total, retaining every late pressure change.
+    // All 363 x endpoints agree within 0.036 mm; the precise native clamp instruction is not isolated yet.
+    const cap = isNum(item.st.vol) && item.st.vol >= 0 ? item.st.vol : Infinity;
+    const line = (arr, a) => { const out = [[X(0), g.curveZero]]; for (let i = 0; i < d.T.length; i++) out.push([X(Math.min(cap, d.series.v[i])), g.curveZero - arr[i] / a * H]); return out; };
     const gin = O.ginLimit > 0 ? O.ginLimit : (Number(item.rec.meta.params.S_G) === 1 ? Number(item.rec.meta.params.C_G) : G.parseNumber(item.rec.meta.ginRaw)) || 0;
     if (O.g.on && gin > 0) { const pts = []; for (let k = 1; k <= 300; k++) { const v = aV * k / 300; pts.push([X(v), g.yZero - gin / v / aP * H]); } for (const seg of G.clipPoly(pts, clip)) P.poly(seg, { c: O.g.color, w: 0.25, dash: [1.5, 1] }); }
     if (O.p.on) for (const seg of G.clipPoly(line(d.series.p, aP), clip)) P.poly(seg, { c: O.p.color, w: 0.34 });
@@ -238,7 +265,8 @@
     const sc = Math.min(10, (GEO.frameBottom - y0 - 6.26 - 6.9 - 2) / Math.max(dMax - dMin, 0.001));
     P.text('1/' + Math.round(1000 / sc), m.L - 0.01, 28.79, { size: 8.88, c: '#f0f0f0' });
     const charts = [
-      { title: t('o.avgP'), unit: '(' + PU + ')', get: (r) => (r.e.st.avgP + (O.sel.eff ? effOffset(r.e.item.hdr, O) : 0)) * UF, color: O.p.color, want: 10 },
+      // The metric Injections table used by this report contains the native effective-pressure mean.
+      { title: t('o.avgP'), unit: '(' + PU + ')', get: (r) => r.e.d.effectiveAvgP * UF, color: O.p.color, want: 10 },
       { title: t('o.cumVol'), unit: '(l)', get: (r) => r.e.st.vol, color: O.d.color, want: 10 },
       { title: t('o.avgQ'), unit: '(l/min)', get: (r) => r.e.st.avgQ, color: O.q.color, want: 10, noLabel: true },
     ];
@@ -265,7 +293,7 @@
 
   /* ---------- entry point ---------- */
   /* helpers shared with js/original2.js (histogram and water-test reports) */
-  G._o = { GEO, pageHead, prepare, effOffset, dec, trim, sleeveText, niceStep, tightMax, stopLabel, extras: {}, units: () => ({ UF, PU, ACC }) };
+  G._o = { GEO, pageHead, prepare, plotSamples, effOffset, dec, trim, sleeveText, niceStep, tightMax, stopLabel, extras: {}, units: () => ({ UF, PU, ACC }) };
 
   G.buildOriginal = function (doc, items, opt) {
     const O = opt.o; DEC = O.dec === '.' || O.dec === ',' ? O.dec : (G.lang === 'en' ? '.' : ',');
@@ -277,7 +305,7 @@
     if (O.reports.time) pages.push(...timeReport(doc, usable, opt));
     if (O.reports.pvg) usable.forEach((e) => pages.push(pvgPage(doc, e, opt)));
     if (O.reports.pvf) {
-      const groups = {}; usable.forEach((e) => { const k = e.item.hdr.job || e.item.rec.meta.fileName; (groups[k] = groups[k] || []).push(e); });
+      const groups = Object.create(null); usable.forEach((e) => { const k = e.item.hdr.job || e.item.rec.meta.fileName; (groups[k] = groups[k] || []).push(e); });
       Object.keys(groups).forEach((k) => pages.push(pvfPage(doc, groups[k], opt)));
     }
     if (O.reports.hist && G._o.extras.hist) pages.push(...G._o.extras.hist(doc, usable, opt));
@@ -286,7 +314,7 @@
     pages.forEach((P, i) => {
       if (O.footerLeft) P.text(O.footerLeft, 5.0, 207.35, { size: 8.16, c: GEO.grey });
       if (O.footerText) P.text(O.footerText, 212.09, 207.35, { size: 8.16, c: GEO.grey });
-      P.text((i + 1) + '/' + pages.length, 291.99, 207.35, { size: 8.16, align: 'right', bold: true });
+      P.text((i + 1) + '/' + pages.length, 291.99, 207.35, { size: 8.16, align: 'right' });
       P.noFooter = true;
     });
     return pages;

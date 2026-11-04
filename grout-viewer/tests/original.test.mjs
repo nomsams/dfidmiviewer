@@ -117,6 +117,55 @@ test('pressure/volume/flow report builds and carries the printout texts', () => 
   assert.equal(doc.count(), 1);
   for (const s of ['Average pressure', 'Cumulated volume', 'Average flow', 'Pressure/Volume/Flow', 'Borehole 18-2', ' Cumulated volume (Gr.)', '(*) : measured values']) assert.ok(t.includes(s), 'text: ' + s);
   assert.ok(t.some((s) => /Number of grouted sleeve\(s\): 1/.test(s)));
+  assert.ok(t.includes('2,2'), 'the plotted metric average uses the native effective-pressure mean, as in the specimen');
+});
+
+test('depth report groups borehole names that coincide with Object prototype properties', () => {
+  const opt = options({ layout: 'classic' }); opt.o.reports = { pvf: true };
+  const items = ['constructor', '__proto__', 'toString', 'constructor'].map(job => itemOf(loadSample(1), { job }));
+  const doc = recordDoc(); G.buildDocument(doc, items, opt, 'records');
+  assert.equal(doc.count(), 3);
+  const labels = doc.pages.flatMap(p => p.ops).filter(o => o.k === 'text').map(o => o.a[0]);
+  assert.ok(labels.includes('Borehole constructor'));
+  assert.ok(labels.some(s => /Number of grouted sleeve\(s\): 2/.test(s)), 'repeated name belongs to one group');
+});
+
+test('every pressure/volume and penetrability sample matches the original curve, including late readings', () => {
+  const P = build({ pvg: true }).page(0), sp = spec('pvg');
+  for (const color of ['#0000ff', '#804040']) {
+    const wanted = sp.lines.filter(l => l.stroke === color);
+    const points = P.ops.filter(o => o.k === 'poly' && o.a[1].c === color).flatMap(o => o.a[0]);
+    assert.equal(points.length - 1, wanted.length, 'all 363 sample segments plus the origin (' + color + ')');
+    near(points[0][0], wanted[0].x1, 0.05, 'curve origin x'); near(points[0][1], wanted[0].y1, 0.05, 'curve origin y');
+    wanted.forEach((line, i) => {
+      near(points[i + 1][0], line.x2, 0.05, color + ' sample ' + i + ' x');
+      near(points[i + 1][1], line.y2, 0.05, color + ' sample ' + i + ' y');
+    });
+    const edge = points[points.length - 1][0];
+    assert.ok(points.filter(p => Math.abs(p[0] - edge) < 1e-6).length > 200, 'late samples remain on the final-volume boundary');
+  }
+});
+
+test('the time curve matches every original pressure segment, rather than just its bounding box', () => {
+  const P = build({ time: true }).page(0), wanted = spec('time').lines.filter(l => l.stroke === '#0000ff');
+  const points = P.ops.filter(o => o.k === 'poly' && o.a[1].c === '#0000ff').flatMap(o => o.a[0]);
+  wanted.forEach((line, i) => {
+    near(points[i + 1][0], line.x2, 0.05, 'pressure sample ' + i + ' x');
+    near(points[i + 1][1], line.y2, 0.05, 'pressure sample ' + i + ' y');
+  });
+});
+
+test('native plotted pressure, flow and volume follow stored measurement precision without changing the input', () => {
+  const rec = loadSample(1), opt = options({ layout: 'classic' });
+  rec.samples = [0, 1, 2, 3].map((i) => ({ tm: i, tt: i, pBar: [1.25, 1.35, 7.3, 8.8][i], qLmin: [1.25, 1.35, 5.06, 6.06][i], v: [0, 0.000076, 0.000152, 0.000222][i] }));
+  const before = JSON.stringify(rec.samples), item = { rec, hdr: { top: '1', bottom: '3' }, st: { endP: 2.1, endQ: 2.35 } };
+  const data = G._o.plotSamples(item, opt);
+  [1.2, 1.4, 7.3, 2.1].forEach((p, i) => near(data.points[i].p, p, 0.000001, 'stored pressure ' + i));
+  [1.2, 1.4, 5.1, 2.35].forEach((q, i) => near(data.points[i].q, q, 0.000001, 'stored flow ' + i));
+  [0, 0.08, 0.16, 0.23].forEach((v, i) => near(data.points[i].v, v, 0.000001, 'rounded volume increments ' + i));
+  assert.equal(JSON.stringify(rec.samples), before, 'raw measurements remain untouched');
+  opt.o.sel.eff = true;
+  near(G._o.plotSamples(item, opt).points[0].p, 1.4, 0.000001, 'effective correction applies after stored quantization');
 });
 
 test('many sleeves fill five columns per page, then a new page; 1 sleeve per page splits them', () => {

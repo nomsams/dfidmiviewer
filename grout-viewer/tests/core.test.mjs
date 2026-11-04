@@ -100,6 +100,19 @@ test('malformed XML and oversize files are refused', () => {
   assert.equal(code(() => G.parseBuffer('big', { byteLength: 300 * 1024 * 1024 })), 'fileTooLarge');
 });
 
+test('invalid units, overflowing converted values, duplicate channels and negative XML event positions are rejected', () => {
+  const head = 'RecordStart\t\t2026-01-01T10:00:00.000\n\t\t000D0080\t000F0080\t93000780\t93000540\t93000500\n\t\ts\ts\tPa\tm3/s\tm3\n\t\t0\t0\t100000\t0\t0\n';
+  const parse = text => G.parseBuffer('REC.TXT', new TextEncoder().encode(text).buffer);
+  assert.equal(code(() => parse(head.replace('Pa', 'constructor'))), 'unsupportedUnits');
+  assert.equal(code(() => parse(head.replace('Pa', 'bar').replace('100000', '1e308'))), 'invalidSamples');
+  assert.equal(code(() => parse(head.replace('100000\t0\t0', '100000\t1e308\t0'))), 'invalidSamples');
+  const source = G.parseTar(new Uint8Array(buf(1))), xmlKey = [...source.keys()].find(k => /REC.XML$/i.test(k)), bnKey = [...source.keys()].find(k => /REC.BN1$/i.test(k));
+  const xml = new TextDecoder().decode(source.get(xmlKey)), width = 7 + loadSample(1).meta.channels.length * 4;
+  const withXml = x => G.parseBuffer('a.DFI', tar({ 'a/REC.XML': x, 'a/REC.BN1': source.get(bnKey) }));
+  assert.equal(code(() => withXml(xml.replace(/pos="\d+"/, 'pos="-' + width + '"'))), 'invalidXml');
+  assert.equal(code(() => withXml(xml.replace(/mes="([^"]+)"/, (m, channels) => 'mes="' + channels + ';000D0080"'))), 'unsupportedChannels');
+});
+
 test('degenerate recordings never throw: empty, one sample, no events, huge', () => {
   const cases = { empty: fakeRec(0), one: fakeRec(1), two: fakeRec(2), noEvents: fakeRec(50, { noEvents: true }), flat: fakeRec(40, { p: 0 }), big: fakeRec(150000) };
   for (const [name, rec] of Object.entries(cases)) {

@@ -106,14 +106,17 @@
       const j = channels.indexOf(c);
       if (j < 0 || !Number.isFinite(values[j])) fail('invalidSamples', c);
       const u = String(units[j] || '').replace(/³/g, '3').replace(/\s/g, '').toLowerCase();
-      if (FACTORS[i][u] === undefined) fail('unsupportedUnits', c + ': ' + u);
+      if (!Object.prototype.hasOwnProperty.call(FACTORS[i], u)) fail('unsupportedUnits', c + ': ' + u);
       return values[j] * FACTORS[i][u];
     });
+    if (!si.every(Number.isFinite)) fail('invalidSamples', 'unit conversion overflow');
     const [tt, tm, p, q, v] = si;
     if (tt < 0 || tm < 0) fail('invalidSamples', 'negative time'); // a volume counter can read slightly below zero; counterSteps() continues it
     const extra = {};
     channels.forEach((c, i) => { if (!REQUIRED.includes(c)) extra[c] = values[i]; });
-    return { tt, tm, p, q, v, pBar: p / 1e5, qLmin: q * 60000, vL: v * 1000, extra };
+    const pBar = p / 1e5, qLmin = q * 60000, vL = v * 1000;
+    if (![pBar, qLmin, vL].every(Number.isFinite)) fail('invalidSamples', 'display unit conversion overflow');
+    return { tt, tm, p, q, v, pBar, qLmin, vL, extra };
   }
   /* Real devices let the counters step backwards: the volume counter loses a few millilitres when the pump restarts, the measuring clock
      moves by rounding noise, or a counter is reset. The three counters are continued from the value they had (every later sample is shifted by the
@@ -145,7 +148,7 @@
         if (/^[\da-f]{8}$/i.test(cells[start]) && cells.some((c) => c.toUpperCase() === CH.TT)) {
           channels = cells.slice(start).filter(Boolean).map((c) => c.toUpperCase());
           col = start; units = [];
-          if (new Set(channels).size !== channels.length || REQUIRED.some((c) => !channels.includes(c))) fail('unsupportedChannels');
+          if (new Set(channels).size !== channels.length || channels.some((c) => !/^[\dA-F]{8}$/.test(c)) || REQUIRED.some((c) => !channels.includes(c))) fail('unsupportedChannels');
           continue;
         }
         if (col < 0) fail('unsupportedChannels');
@@ -218,7 +221,7 @@
     const recAttr = tagList(recDoc, 'Rec')[0] || {};
     const declared = (recAttr.mes || '').split(';').filter(Boolean).map((c) => c.toUpperCase());
     const channels = declared.length ? declared : (parsedTxt ? parsedTxt.channels : []);
-    if (!channels.length || REQUIRED.some((c) => !channels.includes(c))) fail('unsupportedChannels');
+    if (!channels.length || new Set(channels).size !== channels.length || channels.some((c) => !/^[\dA-F]{8}$/.test(c)) || REQUIRED.some((c) => !channels.includes(c))) fail('unsupportedChannels');
 
     let samples = parsedTxt ? parsedTxt.samples : [], width = 0;
     if (bn) {
@@ -241,7 +244,7 @@
     if (xmlEvents.length && bn) {
       events = xmlEvents.map((e) => {
         const pos = Number(e.pos);
-        if (!Number.isInteger(pos) || pos % width || pos / width >= samples.length) fail('invalidXml', 'Event.pos');
+        if (!Number.isInteger(pos) || pos < 0 || pos % width || pos / width >= samples.length) fail('invalidXml', 'Event.pos');
         return { name: e.name || '', data: e.data || '', date: e.date || '', idx: pos / width, ref: Number(e.ref) };
       });
     }

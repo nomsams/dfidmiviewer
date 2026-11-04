@@ -191,13 +191,38 @@ test('the text of the export view exists in every language', () => {
   G.exportKeys.forEach((k) => assert.ok(G.DICT.en['xc.' + k], 'caption for ' + k));
 });
 
-test('original-compatible rounding: pressures averaged in tenths of a bar bring the example rows closer; defaults of the original for records without injection', () => {
+test('grout names matching Object properties receive numeric grout IDs', () => {
+  const m = G.exportModel(['constructor', '__proto__', 'normal', 'constructor'].map(grout => itemOf(loadSample(1), { grout })), {});
+  assert.deepEqual(m.objs.map(r => r.Grout), [1, 2, 3, 1]);
+});
+
+test('ZIP intake rejects bad checksums, incomplete directories and unsupported entries without returning partial data', async () => {
+  const make = () => G.zip([{ name: 'a.DFI', data: new TextEncoder().encode('first') }, { name: 'b.DFI', data: new TextEncoder().encode('second') }]);
+  const corrupt = make(); corrupt[35] ^= 1;
+  await assert.rejects(G.intake.unzipAny(corrupt));
+  const broken = make(), end = broken.length - 22, dv = new DataView(broken.buffer), cd = dv.getUint32(end + 16, true);
+  dv.setUint32(cd + 46 + 5, 0, true);
+  await assert.rejects(G.intake.unzipAny(broken));
+  const wrongSize = make(), sizeView = new DataView(wrongSize.buffer), directory = sizeView.getUint32(wrongSize.length - 22 + 16, true);
+  sizeView.setUint32(directory + 24, 1000, true);
+  await assert.rejects(G.intake.unzipAny(wrongSize), e => e.code === 'notZip');
+  const truncated = make();
+  await assert.rejects(G.intake.unzipAny(truncated.subarray(0, truncated.length - 5)), e => e.code === 'notZip');
+  for (const flags of [false, true]) {
+    const z = make(), view = new DataView(z.buffer), c = view.getUint32(z.length - 22 + 16, true);
+    if (flags) { view.setUint16(6, 1, true); view.setUint16(c + 8, 1, true); }
+    else { view.setUint16(8, 99, true); view.setUint16(c + 10, 99, true); }
+    await assert.rejects(G.intake.unzipAny(z), e => e.code === 'zipUnsupported');
+  }
+});
+
+test('decoded native pressures reproduce both example export rows exactly; defaults for records without injection', () => {
   const eff = { density: 1000, angle: 0, waterDepth: 0 };
   const plain = G.exportModel(items(), { eff, sort: 'date' }).objs, compat = G.exportModel(items(), { eff, compat: true, sort: 'date' }).objs;
   const want = [[2.15, 2.13], [2.24, 1.78]], miss = (rows) => rows.reduce((n, r, i) => n + (r.Average_pressure !== want[i][0]) + (r['30s_pressure'] !== want[i][1]), 0);
   assert.ok(miss(compat) < miss(plain), 'fewer of the four mean pressures differ from the original (' + miss(compat) + ' against ' + miss(plain) + ')');
   assert.equal(compat[0].Average_pressure, 2.15); assert.equal(compat[1].Average_pressure, 2.24); assert.equal(compat[1]['30s_pressure'], 1.78);
-  assert.ok(Math.abs(compat[0]['30s_pressure'] - 2.13) <= 0.011);
+  assert.deepEqual(compat.map(r => [r.Average_pressure, r['30s_pressure']]), want);
   assert.deepEqual(compat.map((r) => r.End_pressure), plain.map((r) => r.End_pressure), 'end pressure is never rounded or corrected');
   /* a record without any stop event: the original calls it a manual stop by the operator and gives a flow of 0 */
   const head = 'RecordStart\t\t2026-01-01T10:00:00.000\t0\t0\t100000\t0\t0\n\t\t\t000D0080\t000F0080\t93000780\t93000540\t93000500\n\t\t\ts\ts\tPa\tm3/s\tm3\n';
@@ -206,4 +231,37 @@ test('original-compatible rounding: pressures averaged in tenths of a bar bring 
   const r = G.exportRow(itemOf(rec, {}), { eff, compat: true });
   assert.equal(r.Stop_type, 'Manu_Operator'); assert.equal(r.Average_flowrate, 0); assert.equal(r.Injected_volume, 0);
   assert.equal(r.Average_pressure, 0.4, 'all readings round to 0.3 bar, plus 0.1 for the grout column'); assert.equal(r['30s_pressure'], 0.4);
+});
+
+// Synthetic recordings isolate the decoded rules without checking private field files into git.
+function nativeRow(pressures, endP, step = 1, eff = EFF, headLoss = 0) {
+  const rec = { events: [], meta: { trigStep: step, headLoss: String(headLoss * 1e5) }, samples: pressures.map(pBar => ({ pBar })) };
+  return G.exportRow({ rec, hdr: {}, st: { endP, vol: 0, avgQ: 0, q30: 0, endQ: 0 } }, { compat: true, eff });
+}
+
+test('native export replaces the final reading with reported end pressure before both means', () => {
+  const p = Array(40).fill(2.25); p[39] = 80;
+  const r = nativeRow(p, 0.6);
+  assert.equal(r.Average_pressure, 2.26, '39 readings round halves to even (2.2), final gauge reading becomes 0.6, then +0.1');
+  assert.equal(r['30s_pressure'], 2.25, '29 table readings and the reported final pressure, divided by 30');
+  assert.equal(r.End_pressure, 0.6, 'the exported end pressure remains a gauge pressure');
+});
+
+test('native 30-second pressure counts the storage step and divides short records by readings used', () => {
+  const r = nativeRow([...Array(5).fill(100), ...Array(15).fill(1)], 10, 2, null);
+  assert.equal(r.Average_pressure, 26.2); assert.equal(r['30s_pressure'], 1.6, '15 readings span 30 seconds');
+  const short = nativeRow([2, 4, 50], 6);
+  assert.equal(short.Average_pressure, 4.1); assert.equal(short['30s_pressure'], 4.1, 'all three readings used; no division by 30');
+  const fractional = nativeRow([...Array(5).fill(100), ...Array(15).fill(1)], 1, 1.5, null);
+  assert.equal(fractional['30s_pressure'], 1, 'VB rounds its integer elapsed time after each addition (1.5 becomes 2 seconds)');
+});
+
+test('native pressures use Single accumulation and clamp corrected values per reading', () => {
+  const long = nativeRow(Array(100000).fill(99.9), 99.9, 1, null);
+  assert.equal(long.Average_pressure, 99.98, 'VB Single summation differs from a double-precision mean of 99.9');
+  assert.equal(long['30s_pressure'], 99.9);
+  const r = nativeRow([-1, 2, 9], 0, 1, EFF);
+  assert.equal(r.Average_pressure, 0.73, 'negative effective samples clamp after the column correction');
+  const loss = nativeRow([0.1, 2, 9], 0.2, 1, null, 0.5);
+  assert.equal(loss.Average_pressure, 0.5, 'head loss and zero clamp apply to each sample, including the reported final pressure');
 });

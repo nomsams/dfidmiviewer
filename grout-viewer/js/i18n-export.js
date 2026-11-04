@@ -9,7 +9,7 @@
   };
   const T = {
     en: {
-      'x.opt.compat': 'Same rounding as the original program (pressures are averaged in steps of 0.1 bar)',
+      'x.opt.compat': 'Use the original program’s pressure calculations',
       'x.empty': 'No injection recorded',
       'warn.counterReset': 'A time or volume counter stepped backwards during the recording (for example after a reset). The curves continue from the earlier value.',
       'gate.sub': 'Enter the password to use this tool.', 'gate.pw': 'Password', 'gate.unlock': 'Unlock', 'gate.wrong': 'Wrong password', 'gate.lock': 'Lock the tool', 'nav.pq': 'Open PQ-Registration (pqview)',
@@ -30,11 +30,11 @@
       'x.dec.comma': 'Comma (1,5)', 'x.dec.dot': 'Point (1.5)', 'x.total': 'Total', 'x.preview': 'Preview', 'x.preview.n': 'The first {n} rows', 'x.preview.none': 'Nothing to show yet.',
       'x.update': 'Update pack, not a measurement', 'x.sheet': 'Grout export',
       'x.tipreports': 'Want to look at the curves or print a report instead?', 'x.openreports': 'Open reports', 'x.tipexcel': 'Need an Excel file from many files?', 'x.openexcel': 'Excel export',
-      'err.duplicate': 'Already added.', 'err.notZip': 'This is not a valid .zip file.', 'err.zipUnsupported': 'This browser cannot open .zip files. Unpack it first, or use a newer browser.',
+      'err.duplicate': 'Already added.', 'err.notZip': 'This is not a valid .zip file.', 'err.zipUnsupported': 'This ZIP format is not supported here. Unpack it first.',
       ...Object.fromEntries(Object.entries(COL.en).map(([k, v]) => ['xc.' + k, v])),
     },
     sv: {
-      'x.opt.compat': 'Samma avrundning som originalprogrammet (tryck medelvärdesbildas i steg om 0,1 bar)',
+      'x.opt.compat': 'Använd originalprogrammets tryckberäkningar',
       'x.empty': 'Ingen injektering registrerad',
       'warn.counterReset': 'En tid- eller volymräknare gick bakåt under registreringen (till exempel efter en nollställning). Kurvorna fortsätter från det tidigare värdet.',
       'gate.sub': 'Ange lösenordet för att använda verktyget.', 'gate.pw': 'Lösenord', 'gate.unlock': 'Lås upp', 'gate.wrong': 'Fel lösenord', 'gate.lock': 'Lås verktyget', 'nav.pq': 'Öppna PQ-Registration (pqview)',
@@ -55,11 +55,11 @@
       'x.dec.comma': 'Komma (1,5)', 'x.dec.dot': 'Punkt (1.5)', 'x.total': 'Summa', 'x.preview': 'Förhandsgranskning', 'x.preview.n': 'De första {n} raderna', 'x.preview.none': 'Inget att visa ännu.',
       'x.update': 'Uppdateringspaket, ingen mätning', 'x.sheet': 'Injekteringsexport',
       'x.tipreports': 'Vill du i stället titta på kurvorna eller skriva ut en rapport?', 'x.openreports': 'Öppna rapporter', 'x.tipexcel': 'Behöver du en Excel-fil av många filer?', 'x.openexcel': 'Excel-export',
-      'err.duplicate': 'Redan tillagd.', 'err.notZip': 'Det här är ingen giltig .zip-fil.', 'err.zipUnsupported': 'Webbläsaren kan inte öppna .zip-filer. Packa upp den först eller använd en nyare webbläsare.',
+      'err.duplicate': 'Redan tillagd.', 'err.notZip': 'Det här är ingen giltig .zip-fil.', 'err.zipUnsupported': 'Det här ZIP-formatet stöds inte här. Packa upp filen först.',
       ...Object.fromEntries(Object.entries(COL.sv).map(([k, v]) => ['xc.' + k, v])),
     },
     fr: {
-      'x.opt.compat': 'Même arrondi que le programme d’origine (pressions moyennées par pas de 0,1 bar)',
+      'x.opt.compat': 'Utiliser les calculs de pression du programme d’origine',
       'x.empty': 'Aucune injection enregistrée',
       'warn.counterReset': 'Un compteur de temps ou de volume a reculé pendant l’enregistrement (par exemple après une remise à zéro). Les courbes continuent à partir de la valeur précédente.',
       'gate.sub': 'Saisissez le mot de passe pour utiliser cet outil.', 'gate.pw': 'Mot de passe', 'gate.unlock': 'Déverrouiller', 'gate.wrong': 'Mot de passe incorrect', 'gate.lock': 'Verrouiller l’outil', 'nav.pq': 'Ouvrir PQ-Registration (pqview)',
@@ -80,11 +80,11 @@
       'x.dec.comma': 'Virgule (1,5)', 'x.dec.dot': 'Point (1.5)', 'x.total': 'Total', 'x.preview': 'Aperçu', 'x.preview.n': 'Les {n} premières lignes', 'x.preview.none': 'Rien à afficher pour le moment.',
       'x.update': 'Pack de mise à jour, pas une mesure', 'x.sheet': 'Export injection',
       'x.tipreports': 'Vous préférez voir les courbes ou imprimer un rapport ?', 'x.openreports': 'Ouvrir les rapports', 'x.tipexcel': 'Besoin d’un fichier Excel à partir de plusieurs fichiers ?', 'x.openexcel': 'Export Excel',
-      'err.duplicate': 'Déjà ajouté.', 'err.notZip': 'Ce n’est pas un fichier .zip valide.', 'err.zipUnsupported': 'Ce navigateur ne peut pas ouvrir les fichiers .zip. Décompressez-le d’abord ou utilisez un navigateur plus récent.',
+      'err.duplicate': 'Déjà ajouté.', 'err.notZip': 'Ce n’est pas un fichier .zip valide.', 'err.zipUnsupported': 'Ce format ZIP n’est pas pris en charge ici. Décompressez le fichier d’abord.',
       ...Object.fromEntries(Object.entries(COL.fr).map(([k, v]) => ['xc.' + k, v])),
     },
     no: {
-      'x.opt.compat': 'Samme avrunding som originalprogrammet (trykk midles i trinn på 0,1 bar)',
+      'x.opt.compat': 'Bruk originalprogrammets trykkberegninger',
       'x.empty': 'Ingen injisering registrert',
       'warn.counterReset': 'En tid- eller volumteller gikk bakover under registreringen (for eksempel etter en nullstilling). Kurvene fortsetter fra den tidligere verdien.',
       'gate.sub': 'Skriv inn passordet for å bruke verktøyet.', 'gate.pw': 'Passord', 'gate.unlock': 'Lås opp', 'gate.wrong': 'Feil passord', 'gate.lock': 'Lås verktøyet', 'nav.pq': 'Åpne PQ-Registration (pqview)',
@@ -105,7 +105,7 @@
       'x.dec.comma': 'Komma (1,5)', 'x.dec.dot': 'Punktum (1.5)', 'x.total': 'Sum', 'x.preview': 'Forhåndsvisning', 'x.preview.n': 'De første {n} radene', 'x.preview.none': 'Ingenting å vise ennå.',
       'x.update': 'Oppdateringspakke, ikke en måling', 'x.sheet': 'Injiseringseksport',
       'x.tipreports': 'Vil du heller se på kurvene eller skrive ut en rapport?', 'x.openreports': 'Åpne rapporter', 'x.tipexcel': 'Trenger du en Excel-fil av mange filer?', 'x.openexcel': 'Excel-eksport',
-      'err.duplicate': 'Allerede lagt til.', 'err.notZip': 'Dette er ikke en gyldig .zip-fil.', 'err.zipUnsupported': 'Denne nettleseren kan ikke åpne .zip-filer. Pakk den ut først, eller bruk en nyere nettleser.',
+      'err.duplicate': 'Allerede lagt til.', 'err.notZip': 'Dette er ikke en gyldig .zip-fil.', 'err.zipUnsupported': 'Dette ZIP-formatet støttes ikke her. Pakk ut filen først.',
       ...Object.fromEntries(Object.entries(COL.no).map(([k, v]) => ['xc.' + k, v])),
     },
   };

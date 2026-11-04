@@ -1,6 +1,6 @@
 # Reverse-engineering notes
 
-How the original software (installed at `C:\Program Files (x86)\DLGPVD\`) produces its numbers and printouts, what was verified, and what is still open. Everything below came from **static analysis only** (plus the specimen printouts you supplied) (assembly metadata, IL, embedded resources, strings, the unpacked sample files and a read-only copy of the original database). The installer and the original program were never run.
+How the original software (installed at `C:\Program Files (x86)\DLGPVD\`) produces its numbers and printouts, what was verified, and what is still open. The rules below come from static analysis (assembly metadata, IL, resources, instructions), supplied specimens and read-only database copies. On 2026-11-04 the user explicitly authorized running DLGPVD; its already-running UI was briefly inspected. Computer Use was subsequently stopped with Escape and no further UI input was sent. The installer was not run.
 
 ## Architecture of the original
 
@@ -54,28 +54,56 @@ Head loss polynomial in the same class: `CalcHeadLoss(Q) = c0 + c1*Q + c2*Q^2` (
 The pressure unit setting `Unite Pression` maps 0 -> x1 (bar), 1 -> x1.01972 (kg/cm2), 2 -> x100 (kPa) in the export.
 
 ## The export table (Site > Export > Field separator > Semicolon)
-Reproduced from a pair of real export rows supplied by the user, with the .NET code of `DXdataPVD.MDB.MdbManage.AddToMDB` (IL) as the guide. One row per `.DFI`, 29 columns in the order of `BILAN_COLUMNS`. What the DFI import writes (IL, "DPV" path): `Pump` is always `P1`, `Regrout` 1, `X/Y/Z_coord` 0, `Water_depth` 0, levels default to 1 m when the file has none, `Grout` is the number of the grout in the grout table (1 when unnamed), `Injected_volume` = rounded to 2 decimals, `Dry_weights` equals the volume in the examples, `Head_loss` = the file's head loss (Pa) / 1e5, subtracted from the mean, 30 s and end pressure (floored at 0). Durations are cut to whole seconds, not rounded (`00:07:32` for 452.8 s). The original writes no value for the empty last column (`Inclination`), so rows have 28 fields. Measured against the two examples: every field matches except three pressure cells that differ by 0.01 bar when the effective pressure (+0.1 bar for a 1 m section) is added, so the mean and 30 s pressure columns are reproduced to within the rounding of the export, not bit for bit. The raw values (option off) equal the original database table exactly (2,05 / 2,02 and 2,13 / 1,67).
+Reproduced from the original export and the .NET code of `DXdataPVD.MDB.MdbManage.AddToMDB` (IL), followed by native `LoadBAP` and the pressure routines below. One row per `.DFI`, 29 columns in the order of `BILAN_COLUMNS`. What the DFI import writes (IL, "DPV" path): `Pump` is always `P1`, `Regrout` 1, `X/Y/Z_coord` 0, `Water_depth` 0, levels default to 1 m when the file has none, `Grout` is the number of the grout in the grout table (1 when unnamed), `Injected_volume` = rounded to 2 decimals, `Dry_weights` equals the volume in the examples, `Head_loss` = the file's head loss (Pa) / 1e5. Durations are cut to whole seconds, not rounded (`00:07:32` for 452.8 s). The original writes no value for the empty last column (`Inclination`), so rows have 28 fields. All fields now match the two examples and all 83 reference rows exactly. Raw-import calculations remain available with compatibility off; they correspond to `Injections_US`, a different calculation path.
 
 ### Checked against 83 real exports (field files and the original program's CSV of them)
-Every column except the two mean pressures is reproduced **in all 83 rows** (dates, times, durations, volume, end pressure, the three flows, stop type, levels, grout, pump). Two defaults of the original's import were found from this check: a record with no stop event has the stop type `Manu_Operator`, and a record with no grouting time has an average flow of 0 (it is not blank).
-The mean pressure and the 30 s pressure are the part that is **not** a plain mean of the samples. What the data shows (and what the export option "same rounding as the original" does):
-* The original works from a table that holds pressure in tenths of a bar, so each reading is rounded to 0.1 bar (halves to even) before it is averaged. Plain means match 60 of 83 rows; with this rounding 67 do (offset +0.100 bar for a 1 m section, the `CalcPNormal` value; scanning the offset gives 0.1000 as the best constant).
-* The 30 s value is the mean of the 29 readings before the final record (not the last 30) and its grout-column offset is 0.0981 bar per metre of water (g = 9.81) where the mean uses 0.1: 58 of 83 rows with these, 29 with the plain last 30.
-* Together 55 of 83 whole rows are identical (19 without the option). The other 28 differ in one or both pressure cells, mostly by 0.01 bar; a few short, high-pressure recordings by up to 0.1-0.2 bar. The rule for those is not known, and no trimming of the sample list, event-based window, time-based window, de-duplication of the event lines or time weighting explained them better. The 30 s window length was chosen by search over these 83 files, so treat it as a fitted value, not a decoded one.
-* Very short records (6 readings, no injection) differ by about 0.01 bar from the rule; they carry no grout.
+**2026-11-04: all columns match all 83 rows.** With compatibility and effective pressure enabled (1000 kg/m³, vertical, no ground water), the actual original semicolon CSV in ProgramData is reproduced **byte for byte: 10,784 bytes**. The git-ignored `reference/original-export-83-rows.csv` has normalized LF line endings (10,700 bytes); its content is identical after restoring CRLF. Two defaults of the original import remain verified: a record with no stop event has stop type `Manu_Operator`, and no grouting duration gives average flow 0.
+
+The pressure rules are now **decoded**, not fitted:
+
+1. The .NET importer stores each pressure as signed Int16 tenths, rounding halves to even. A read-only copy of the 83-row database backup confirms the pressure table agrees with the rounded DFI samples in every record (including negative values).
+2. Native `0x006D9E10` recognizes scale marker **6553** and returns `Single(65535 / 10)`. `LoadBAP` then divides by 65535 and stores a Single scale; `0x007103A0` decodes signed big-endian words and multiplies by this scale. Thus the actual factor is **Single(0.1)**, not 6553/65535. Using the latter left two mismatches after the final-value correction.
+3. `LoadBAP` (`0x00701BC0`) allocates a 1-based table, stride **0x34**, with gauge pressure at +4 and effective pressure at +0x0C. At `0x00703671–0x00703677` it **overwrites the last gauge reading with the database End_pressure**. At `0x007038E2` it recomputes the last effective pressure. The end value is rounded to two decimals by the importer. This replacement explains the short/high-pressure mismatches and why the earlier fitted window appeared to help.
+4. Per-sample effective pressure is decoded at `0x00716250`: `P - headLoss + groutColumn - waterColumn`, with column helpers `0x00716150` / `0x00716050`. Negative corrected table values clamp to zero. The reference cases have zero head loss and a **+0.1 bar** column correction for both means. There is no special 0.0981 factor for the 30-second mean.
+5. `CalcPressionMoyenne` (`0x00726FF0`) visits **1 through UBound inclusive**, sums raw and effective pressure independently, and divides by UBound. The sum is stored as **Single after every addition** (`0x0072716F–0x00727176`, `0x00727206–0x0072720D`) and the quotient is also Single.
+6. `GetValPression30` (`0x0071A3C0`) visits the table **backwards, including the replaced final reading**, until its integer elapsed-time accumulator reaches 30. After each sample it adds the Single storage step and converts back to integer with VB's ties-to-even rounding (`0x0071A605–0x0071A62A`). It divides by the number of readings used (`0x0071A65E–0x0071A693`), so a short record is divided by its actual count. For the reference 1-second recordings this is the last 30 table readings, or the whole table if shorter.
+
+Implemented in `js/export.js` with `Math.fround` at the native Single stores. The raw-import path is unchanged. Synthetic regressions distinguish the final replacement, ties-to-even quantization, storage steps, short records, per-sample clamping/head loss, and Single accumulation. An opt-in integration test checks every original cell and complete CSV text when `GROUT_FIDELITY_DFI_DIR` and `GROUT_FIDELITY_CSV` are set.
+
+**Historical fitted rule, superseded and removed:** a 29-reading window before the final sample plus 0.0981 column factor yielded 55/83 identical rows (67/83 averages, 58/83 30-second values). Those constants were selected by numeric search, not decoded. They are no longer active. The decoded replacement raises the result to **83/83 rows, 83/83 average pressures, 83/83 30-second pressures**, with all other columns unchanged. Non-default density, ground water, variable storage steps and nonzero head loss have synthetic coverage but still need independent original exports for end-to-end verification.
 
 ## Printouts: measured from real specimens
 
-Three real printouts ("Microsoft Print to PDF", A4 landscape) were analysed as vector data (`tests/fixtures/spec-*.json`, extracted with a content-stream parser; coordinates are snapped to the printer's 0.26 mm grid). Findings that drive `js/original.js`:
+Three real printouts ("Microsoft Print to PDF", A4 landscape) were analysed as vector data (`tests/fixtures/spec-*.json`, extracted with a content-stream parser). The curves include 600 dpi printer-dot quantization (about 0.0423 mm); do not infer their accuracy from rounded text positions. Findings that drive `js/original.js`:
 
-* **Frames:** time report 5 mm margins (frame 5–291.97 × 35.98–202.95 mm); the other two 6.99–289.94 mm. Header box 9.99–24.95 mm with an empty logo cell (left, to x = 100.63 / 101.3) and, right of it, site (14.16 pt bold), "GROUTING" (8.88 pt), contract in brackets (right-aligned, date when the contract is empty), report title (8.88 pt) at the cell's bottom left, and a grey "DLGPVD  6.61/DPV 8.10" tag under the box. Footer at y = 207.35: "...", a grey company line, bold page "n/N".
-* **Time report:** five columns of 57.39 mm; per column a header (bold hole name + " sleeve (top-bottom m)", blue "(50 bar)" over the left half, date-time of the record start) and a plot starting at y = 45.76 whose height is *measuring-clock duration ÷ scale* (352.78 s at 1 cm = 60 s = 58.8 mm). Ten dashed divisions (0.5/0.5 mm dashes), solid centre line and right edge. **The column is twice the entered scale wide** (the 50 bar line is the centre). Ticks every cm in the page margin. Curve = every sample from the first record to the last pump stop plotted against the measuring clock (idle time does not advance it); it starts on the zero line. Red line = the SetCons pressure limit. Footer row: stop type in red ("Manu_StopOperator" → "operator (M)"), total volume rounded to a whole litre with one decimal ("6,0 l"), volume limit in red brackets, grout type right-aligned with a 0.6 mm margin; an unnamed grout prints the literal **"Unknow"** (a string literal in the original's import code, found with REA).
-* **Pressure/Volume/GIN:** plot 27.01–280.12 × 51.01–155.96 mm, majors every 5 bar / 10 l (0.25 mm) and minors in between (0.17 mm), pressure blue 0.34 mm, penetrability brown #804040 0.55 mm with its own left axis. **The curve stops at the reported injected volume** (whole litres from the PumpStop event), not at the last sample.
+* **Frames:** time report 5 mm margins (frame 5–291.97 × 35.98–202.95 mm); the other two 6.99–289.94 mm. Header box 9.99–24.95 mm with an empty logo cell (left, to x = 100.63 / 101.3) and, right of it, site (14.16 pt bold), "GROUTING" (8.88 pt), contract in brackets (right-aligned, date when the contract is empty), report title (8.88 pt) at the cell's bottom left, and a grey "DLGPVD  6.61/DPV 8.10" tag under the box. Footer at y = 207.35: "...", a grey company line, regular page "n/N" (source font resource F1).
+* **Time report:** five columns of 57.39 mm; per column a header (bold hole name + " sleeve (top-bottom m)", blue "(50 bar)" over the left half, date-time of the record start) and a plot starting at y = 45.76 whose height is *measuring-clock duration ÷ scale* (352.78 s at 1 cm = 60 s = 58.8 mm). Ten dashed divisions, solid centre line and right edge. **Correction:** the PDF's `[0.5 0.5]` dash array is in user units under a 0.75-point transform: each dash/gap is **0.1322917 mm**, with round caps (`1 J`), not 0.5 mm. **The column is twice the entered scale wide** (the 50 bar line is the centre). Ticks every cm in the page margin. Curve = every sample from the first record to the last pump stop plotted against the measuring clock (idle time does not advance it); it starts on the zero line. Red line = the SetCons pressure limit. Footer row: stop type in red ("Manu_StopOperator" → "operator (M)"), total volume rounded to a whole litre with one decimal ("6,0 l"), volume limit in red brackets, grout type right-aligned with a 0.6 mm margin; an unnamed grout prints the literal **"Unknow"** (a string literal in the original's import code, found with REA).
+* **Pressure/Volume/GIN:** plot 27.01–280.12 × 51.01–155.96 mm, majors every 5 bar / 10 l (0.25 mm) and minors in between (0.17 mm), pressure blue 0.34 mm, penetrability brown #804040 0.55 mm with its own left axis. The measured curve baseline is **155.998 mm**, one printer dot below the grid axis. **Correction:** the curve retains all 363 samples, including pressure changes after reaching reported volume; the former implementation dropped these and retained only 84 points. The volume-cap rule below is fitted.
 * **Pressure/Volume/Flow:** three depth charts with 0–10 scales, a two-row information table; only a single sleeve at a single depth was available.
-* The average pressure printed in the depth report for the sample hole is "2,2", consistent with the effective-pressure hypothesis above (raw 2.13 + ≈0.1 bar).
+* The average pressure printed in the depth report for the sample hole is **"2,2"**, now reproduced using the native effective-pressure mean rather than the raw sample mean (which printed 2,1). The report reads the metric Injections values; its dependence on non-default effective-pressure options still needs an original option matrix.
+
+### Plot table reconstruction and endpoint checks (2026-11-04)
+
+**Decoded:** `DXdataPVD.DPVdata.DPVrecord.SetMesuresBytes`, IL_0205–03AA, stores pressure and flow as tenths (Single input, ties-to-even rounding), and positive monotonic volume increments as **0.01 litre** units. `LoadBAP` accumulates volume as Single and applies the final reported pressure override described above (and a positive reported final-flow override). `js/original.js` now reconstructs this table without changing raw data. Synthetic tests cover quantization, volume increments, final overrides, effective correction and input immutability.
+
+**FITTED:** cap cumulative plot volume at the reported injected total while retaining every sample. Quantized increments plus this cap match **all 363 original x endpoints**, maximum error **0.03510 mm**. The precise native instruction implementing the cap has not yet been isolated; it must not be described as decoded.
+
+The tests compare every supplied segment endpoint, not only curve bounding boxes:
+
+| Curve | Original segments checked | Maximum x error (mm) | Maximum y error (mm) |
+| --- | ---: | ---: | ---: |
+| Pressure/time | 360 | 0.03849 | 0.04513 |
+| Pressure/volume | 363 | 0.03510 | 0.03520 |
+| Penetrability/volume | 363 | 0.03510 | 0.04534 |
+
+All are below the **0.05 mm** test tolerance. The time trace can contain one additional coincident event-snapshot point; no new stop/de-duplication rule was fitted. Tests also inflate the actual generated PDF streams to verify every P/V pressure coordinate, 0.375-point grid dashes, line caps, rectangle joins and regular footer numbering.
+
+**Typography/output limits:** native page callbacks set Arial; embedded source font name tables confirm Arial regular and bold. Original SVG pages now select Arial first. An isolated Edge `file://` check exercised the real Print and Save PDF buttons for all three modes: **zero HTTP(S) requests, zero page errors**, browser PDFs embed Arial. Browser PDFs and direct PDFs were rendered and visually inspected using bundled Python/pdfium (no Python installation). Direct Save PDF still uses standard Helvetica, so it is not typographically identical. Edge's A4 MediaBox height is 594.95996 pt versus 595.32001 pt in the desktop specimen (about 0.127 mm difference). These checks do not establish pixel-identical output, nor verify flow-enabled time curves, smoothing, multi-sleeve continuation or every option combination.
 
 ### Remaining uncertainty
 Behaviour with several sleeves per hole, long records that exceed a column, other stop types and non-default option combinations follows the same rules but was not available as specimens. To close this, print such a case from the original to PDF and add it to `tests/fixtures` (see `tests/original.test.mjs` for how a specimen is compared).
+
+**Web layout guard (2026-11-04 bug review):** water-test tables now calculate their page capacity from the frame height, row/header heights and a 16 mm allowance for totals and the note (9 rows on the chart page, 24 on continuation pages). The previous fixed 30-row continuation table ended at **218.6 mm**, outside the 202.96 mm frame, and the clamped summary could overlap rows. A synthetic 45-stage regression checks every row and summary position. This is an authored pagination correction to the interpreted layout, **not evidence of the native water-test layout**.
 
 ## The original's print modes, options and output pipeline
 
@@ -124,11 +152,55 @@ Static only; the program was never run. 1637 procedures, 10948 strings. Each CLI
 * **Head loss** (`FUN_00716d90`): `loss = c0 + c1*Q + c2*Q^2`. The coefficients are read from the stage configuration and divided by 1e5 (Pa to bar); c1 and c2 are additionally divided by 60000 once and twice (Q in l/min). The effective pressure of a stage is the measured pressure minus this loss. The app now has the polynomial as options (`lug.lossLin`, `lug.lossQuad`) next to the constant.
 * **Pressure unit conversions** in the print code: bar to kPa x100, bar to kg/cm2 x1.0197163. Raw pressure on the legacy path is built from two bytes (`FUN_007103a0`: `(hi*256+lo)*scale`), i.e. the device protocol, not the DFI file.
 * **"Lugeon apparent final = x"** is only printed when the lugeon mode and the **Peffective** setting are both on (the registry value `Configuration\Peffective` is a boolean "show effective pressure"). The value printed is the last stage's record (field +0x20 of a 0x34-byte stage record, rounded to the configured decimals).
-* **GetValLugeon30, IsPalierLine, FindFirstPalierStart, IsLugeonRecord** only occur as VB6 error-handler strings ("Procedure X du module Y"): they have no direct cross-references, so their bodies were not isolated.
+* **Correction (2026-11-04):** the diagnostic BSTRs do have direct native `PUSH` references. `GetValLugeon30`, `IsPalierLine` and `IsLugeonRecord` are now located (table below). `FindFirstPalierStart` still has no such reference. The earlier absence of Ghidra xrefs was not proof of absent references in the executable.
 * **Not found in the native code:** a hydrostatic term in the stage computation. The ~0.1 bar difference in the pressure averages turned out to live in the .NET assembly (see "Resolved" above).
 
 ### Still open
 The remaining questions need a water-test printout plus its DFI file to check against.
+
+### Repeatable VB6 inventory (2026-11-04)
+
+`tools/re/vb6-map.mjs` reads a **copy** of the binary without loading it. It follows the PE entry-point `push VBHeader; call`, then ProjectInfo, ObjectTable, public descriptors and optional control/event tables. Result for SHA-256 `a50a6fee27ca415b35b87b3d02f8f414cc00ff5191941f1d51c0c84e80b6d683`: **85 objects, 839 controls, 475 native event labels, 66 diagnostic strings with 69 PUSH references**, zero unsupported event thunks. These are decoded metadata, not numeric fits. Descriptor layouts were cross-checked against [python-vb](https://github.com/williballenthin/python-vb/blob/master/vb/__init__.py) and the [vbdec format reference](https://sandsprite.com/vbdec/VB6_FileFormat_Spec.html).
+
+Important limitation: **native `ObjectInfo.lpMethods` enumerates API declarations**, not every application procedure. Many private procedure-name slots are null, and standard modules have no name array. The assignment's proposed full `ProcDescInfo` name walk cannot recover all native procedure names. Event-table jump targets are reliable; the nearest validated x86 prologue before a diagnostic PUSH is emitted only as a **candidate**, requiring instruction inspection.
+
+**Decoded extension, 2026-11-04:** `OptionalObjectInfo + 0x28` holds the native method-link count and `+0x30` the pointer table. Entries point directly to an `E9 rel32` jump, eight bytes after the this-adjustment thunk. This recovers **898 native procedure links**, in addition to the 475 event labels. Ten unsupported method/property thunk shapes are warned about and skipped. Generated Ghidra scripts apply anonymous `Form_nativeProcN` labels, preserving aliases and leaving diagnostic candidates unapplied; these labels are metadata identities, not recovered VB source names. Synthetic tests verify virtual-address translation and jump resolution.
+
+Relevant print owners contain 42 links for `Tft`, 48 for `DiagSynthetic` and 36 for `DiagPVD`. Static instruction reading located these entry points:
+
+| Address | Metadata / diagnostic identity | Print role |
+| --- | --- | --- |
+| `0x007E0F80`, `0x007EADA0`, `0x007F47B0`, `0x007FCAC0` | `Tft_nativeProc24` through `27` | Time-report drawing routines; complete option semantics remain open |
+| `0x00586710` | `DiagSynthetic_nativeProc23` | Table/graph drawing |
+| `0x00595320`, `0x00595EE0` | `TraiteSetCons`, `TraiteSetSleeve` (diagnostics) | Instruction and sleeve processing |
+| `0x00596250`, `0x00596D60` | `TraceGraphGIN`, `TraceGraphPenetrabilite` (diagnostics) | GIN and penetrability curves |
+| `0x0059BEC0` | `DessineCourbePenetrabilité` (diagnostic) | Penetrability drawing |
+| `0x005BAAB0`, `0x005C2D70` | `DiagPVD.EcritParametres`, `EcritTranche` (diagnostics) | Depth-report parameters and sleeve row |
+| `0x007E0120`, `0x00584FC0`, `0x005C5090` | Page-event callbacks for the three forms | Set the printer font to Arial |
+
+```
+node tools/re/vb6-map.mjs <binary-copy> <work-folder>/vb6-map.json <work-folder>/DlgEventLabels.java
+```
+
+The original portable Ghidra folder is incomplete (no `support/analyzeHeadless.bat`) and the REA package is absent. Native formulas were instead read with `iced-x86` 1.22.0, installed with scripts disabled in the separate `../grout-re-work` folder. Its package integrity is recorded in that folder's lockfile. No app dependency or .NET SDK was added. Binary copies, disassemblies, database copies and generated inventories stay outside this repo.
+
+| Function / instruction address | VB name / identity | What is established |
+| --- | --- | --- |
+| `0x006D9E10` | scale-marker decoder (name unknown) | Special cases 65, 655, 6553 as 65535/1000, /100, /10 |
+| `0x00701BC0` | `LoadBAP` (diagnostic name) | Builds the 1-based, 0x34-byte measurement table and final-value overrides |
+| `0x00704D50` | `PressionMoyenne` | Legacy configurable end-window calculation; separate from whole-table mean |
+| `0x00710270` | signed-word decoder (name unknown) | Converts the two-byte value to signed Int16 |
+| `0x007103A0` | scaled sample decoder (name unknown) | Signed big-endian word multiplied by Single scale |
+| `0x00710A20` | `IsPalierLine` | Body located through diagnostic PUSH; stage semantics remain to be read |
+| `0x00715100` | `IsLugeonRecord` | Body located through diagnostic PUSH |
+| `0x00716050` | water-column helper (name unknown) | Water-depth correction, conditional on water above section middle |
+| `0x00716150` | grout-column helper (name unknown) | `cos(angle*pi/180) * middle * (density/1000) / 10` |
+| `0x00716250` | effective-pressure helper (name unknown) | `P - headLoss + groutColumn - waterColumn` |
+| `0x0071A3C0` | `GetValPression30` | Backward pressure mean with integer elapsed-time accumulator |
+| `0x0071AE50` | `GetValLugeon30` | Body located through diagnostic PUSH; stage use remains to be decoded |
+| `0x00726FF0` | `CalcPressionMoyenne` | Whole-table raw/effective means, Single accumulation |
+
+This inventory recovers runtime control names and event wiring, **not yet** serialized captions, control positions or full print geometry. Existing specimen-derived layouts remain the verified print evidence.
 
 ## Reproducing the analysis
 

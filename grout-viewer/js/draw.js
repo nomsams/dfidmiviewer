@@ -1,7 +1,8 @@
 /* Drawing layer. Report code draws in millimetres on "pages"; two backends render the same calls:
  *   G.svgDoc()  -> SVG strings (screen preview and browser printing)
  *   G.pdfDoc()  -> jsPDF document (vector PDF file)
- * Using one code path guarantees that preview, print and PDF are identical.
+ * Shared geometry drives both backends; browser printing uses installed fonts,
+ * while direct PDF text uses the bundled PDF library's standard Helvetica face.
  */
 (function (G) {
   'use strict';
@@ -63,7 +64,7 @@
           w, h, no: pages.length,
           line(x1, y1, x2, y2, o) {
             o = o || {};
-            parts.push(`<line x1="${n3(x1)}" y1="${n3(y1)}" x2="${n3(x2)}" y2="${n3(y2)}" stroke="${o.c || '#000'}" stroke-width="${o.w || 0.2}"${o.dash ? ` stroke-dasharray="${o.dash.join(' ')}"` : ''}/>`);
+            parts.push(`<line x1="${n3(x1)}" y1="${n3(y1)}" x2="${n3(x2)}" y2="${n3(y2)}" stroke="${o.c || '#000'}" stroke-width="${o.w || 0.2}" stroke-linecap="${p.orig ? 'round' : 'butt'}"${o.dash ? ` stroke-dasharray="${o.dash.join(' ')}"` : ''}/>`);
           },
           rect(x, y, rw, rh, o) {
             o = o || {};
@@ -88,7 +89,7 @@
             parts.push(`<text xml:space="preserve" style="white-space:pre" x="${n3(x)}" y="${n3(y)}" font-size="${n3((o.size || 8) * PT)}" font-weight="${o.bold ? 700 : 400}"${o.italic ? ' font-style="italic"' : ''} fill="${o.c || '#000'}" text-anchor="${anchor}"${rot}>${esc(s)}</text>`);
           },
           svg() {
-            return `<svg xmlns="http://www.w3.org/2000/svg" class="gv-page${w > h ? ' land' : ''}" viewBox="0 0 ${w} ${h}" width="${w}mm" height="${h}mm" font-family="Helvetica, Arial, sans-serif"><rect width="${w}" height="${h}" fill="#fff"/>${parts.join('')}</svg>`;
+            return `<svg xmlns="http://www.w3.org/2000/svg" class="gv-page${w > h ? ' land' : ''}" viewBox="0 0 ${w} ${h}" width="${w}mm" height="${h}mm" font-family="${p.orig ? 'Arial, Helvetica, sans-serif' : 'Helvetica, Arial, sans-serif'}"><rect width="${w}" height="${h}" fill="#fff"/>${parts.join('')}</svg>`;
           },
         };
         pages.push(p); return p;
@@ -115,9 +116,10 @@
         const dash = (o) => { pdf.setLineDashPattern(o && o.dash ? o.dash : [], 0); };
         const p = {
           w, h, no: no - 1,
-          line(x1, y1, x2, y2, o) { enter(); o = o || {}; pdf.setDrawColor(...hex(o.c)); pdf.setLineWidth(o.w || 0.2); dash(o); pdf.line(x1, y1, x2, y2); dash(); },
+          line(x1, y1, x2, y2, o) { enter(); o = o || {}; pdf.setDrawColor(...hex(o.c)); pdf.setLineWidth(o.w || 0.2); pdf.setLineCap(p.orig ? 'round' : 'butt'); dash(o); pdf.line(x1, y1, x2, y2); dash(); },
           rect(x, y, rw, rh, o) {
             enter(); o = o || {};
+            pdf.setLineJoin('miter');
             if (o.fill) pdf.setFillColor(...hex(o.fill));
             if (o.stroke) { pdf.setDrawColor(...hex(o.stroke)); pdf.setLineWidth(o.w || 0.2); }
             dash(o);

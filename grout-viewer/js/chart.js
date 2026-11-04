@@ -155,7 +155,10 @@
     if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas); else window.addEventListener('resize', resize);
 
     return {
-      set(patch) { Object.assign(st, patch); if (patch.rec || patch.xmode) st.view = null; draw(); },
+      set(patch) {
+        if (patch.rec !== undefined && patch.rec !== st.rec) { st.hover = -1; drag = null; if (tip) tip.hidden = true; }
+        Object.assign(st, patch); if (patch.rec || patch.xmode) st.view = null; draw();
+      },
       reset() { st.view = null; draw(); },
       redraw: draw, resize,
       get zoomed() { return !!st.view; },

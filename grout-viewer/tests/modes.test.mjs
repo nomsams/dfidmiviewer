@@ -61,6 +61,27 @@ test('water test and volume distribution reports build, show the stages and tota
   assert.ok(none.pages.some((p) => /No stage found|Number of stages: \d/.test(txt(p))), 'a grouting file yields a plateau analysis or the "no stage" message, never an error');
 });
 
+test('long water-test tables keep every stage and their summary inside the page frame', () => {
+  const rec = waterTest(true); rec.samples = []; rec.events = [];
+  for (let stage = 0; stage < 45; stage++) {
+    const a = rec.samples.length;
+    for (let j = 0; j < 2; j++) { const i = a + j; rec.samples.push({ tt: i * 60, tm: i * 60, p: 2e5, pBar: 2, q: 0.0001, qLmin: 6, v: i * 0.006, vL: i * 6, extra: {} }); }
+    rec.events.push({ name: 'LugeonStart', idx: a, data: String(stage + 1) }, { name: 'LugeonStop', idx: a + 1, data: String(stage + 1) });
+  }
+  const opt = options({ layout: 'classic' }); opt.o.reports = { lug: true };
+  const doc = recordDoc(); G.buildDocument(doc, [itemOf(rec, { top: '1', bottom: '6' })], opt, 'records');
+  let rowCount = 0;
+  for (const page of doc.pages) {
+    const rows = page.ops.filter(o => o.k === 'rect' && o.a[0] === 27.01 && Math.abs(o.a[3] - 5.6) < 1e-8);
+    rowCount += rows.length;
+    const bottom = Math.max(...rows.map(o => o.a[1] + o.a[3]));
+    assert.ok(bottom <= G.ORIGINAL.frameBottom, 'table ends inside the frame: ' + bottom);
+    const summary = page.ops.find(o => o.k === 'text' && o.a[0].startsWith('Number of stages:'));
+    if (summary) { assert.ok(summary.a[2] >= bottom + 7, 'summary has space below the table'); assert.ok(summary.a[2] + 5 <= G.ORIGINAL.frameBottom); }
+  }
+  assert.equal(rowCount, 45, 'all stages are retained across pages');
+});
+
 test('multicriteria selection: ranges, stop type, dates, sorting, daily and grand totals', () => {
   const a = itemOf(loadSample(0), { pump: 'P1' }), b = itemOf(loadSample(1), { pump: 'P2' }), all = [b, a];
   assert.deepEqual(G.selectItems(all, {}).map((i) => i.hdr.job), ['18-1', '18-2'], 'sorted by start date ascending');

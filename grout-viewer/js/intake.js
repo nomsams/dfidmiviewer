@@ -11,25 +11,37 @@
   /* raw deflate through the browser's own decompressor (Chrome/Edge 80+, Firefox 113+, Safari 16.4+) */
   async function inflateRaw(u8) {
     if (typeof DecompressionStream === 'undefined') { const e = new Error('zipUnsupported'); e.code = 'zipUnsupported'; throw e; }
-    const ds = new DecompressionStream('deflate-raw'), w = ds.writable.getWriter();
+    let ds; try { ds = new DecompressionStream('deflate-raw'); } catch (err) { const e = new Error('zipUnsupported'); e.code = 'zipUnsupported'; throw e; }
+    const w = ds.writable.getWriter();
     w.write(u8).catch(() => {}); w.close().catch(() => {});
     return new Uint8Array(await new Response(ds.readable).arrayBuffer());
   }
   /* reads stored and deflated entries of a .zip; directories are skipped */
   async function unzipAny(u8) {
     const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), out = [];
-    let p = u8.length - 22; while (p >= 0 && dv.getUint32(p, true) !== 0x06054b50) p--;
-    if (p < 0) { const e = new Error('notZip'); e.code = 'notZip'; throw e; }
-    const n = dv.getUint16(p + 10, true); let c = dv.getUint32(p + 16, true); const dec = new TextDecoder();
+    const fail = (code) => { const e = new Error(code); e.code = code; throw e; };
+    let p = u8.length - 22;
+    while (p >= Math.max(0, u8.length - 22 - 65535) && !(dv.getUint32(p, true) === 0x06054b50 && p + 22 + dv.getUint16(p + 20, true) === u8.length)) p--;
+    if (p < Math.max(0, u8.length - 22 - 65535)) fail('notZip');
+    const n = dv.getUint16(p + 10, true), cdSize = dv.getUint32(p + 12, true), cd = dv.getUint32(p + 16, true), dec = new TextDecoder();
+    if (dv.getUint16(p + 4, true) || dv.getUint16(p + 6, true) || dv.getUint16(p + 8, true) !== n || n === 65535 || cd === 0xffffffff || cdSize === 0xffffffff) fail('zipUnsupported');
+    if (cd + cdSize > p) fail('notZip');
+    let c = cd;
     for (let i = 0; i < n; i++) {
-      if (c + 46 > u8.length || dv.getUint32(c, true) !== 0x02014b50) break;
-      const method = dv.getUint16(c + 10, true), csz = dv.getUint32(c + 20, true), nl = dv.getUint16(c + 28, true), el = dv.getUint16(c + 30, true), cl = dv.getUint16(c + 32, true), lo = dv.getUint32(c + 42, true);
+      if (c + 46 > cd + cdSize || dv.getUint32(c, true) !== 0x02014b50) fail('notZip');
+      const flags = dv.getUint16(c + 8, true), method = dv.getUint16(c + 10, true), crc = dv.getUint32(c + 16, true), csz = dv.getUint32(c + 20, true), size = dv.getUint32(c + 24, true), nl = dv.getUint16(c + 28, true), el = dv.getUint16(c + 30, true), cl = dv.getUint16(c + 32, true), lo = dv.getUint32(c + 42, true);
+      if ((flags & 1) || (method !== 0 && method !== 8) || dv.getUint16(c + 34, true) || lo === 0xffffffff || size === 0xffffffff || csz === 0xffffffff) fail('zipUnsupported');
+      if (c + 46 + nl + el + cl > cd + cdSize || lo + 30 > cd || dv.getUint32(lo, true) !== 0x04034b50) fail('notZip');
       const name = dec.decode(u8.subarray(c + 46, c + 46 + nl)); c += 46 + nl + el + cl;
+      if ((dv.getUint16(lo + 6, true) & 1) || dv.getUint16(lo + 8, true) !== method) fail('notZip');
+      const ds = lo + 30 + dv.getUint16(lo + 26, true) + dv.getUint16(lo + 28, true);
+      if (ds + csz > cd) fail('notZip');
       if (/\/$/.test(name) || IGNORE.test(name)) continue;
-      const ds = lo + 30 + dv.getUint16(lo + 26, true) + dv.getUint16(lo + 28, true), raw = u8.subarray(ds, ds + csz);
-      if (method === 0) out.push({ name, data: raw.slice() });
-      else if (method === 8) out.push({ name, data: await inflateRaw(raw) });
+      const raw = u8.subarray(ds, ds + csz), data = method === 0 ? raw.slice() : await inflateRaw(raw);
+      if (data.length !== size || G.crc32(data) !== crc) fail('notZip');
+      out.push({ name, data });
     }
+    if (c !== cd + cdSize) fail('notZip');
     return out;
   }
 

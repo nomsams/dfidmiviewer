@@ -54,9 +54,16 @@
     if (e && e.code) { const m = t('err.' + e.code); return (m.startsWith('err.') ? t('err.unknown') : m) + (S.mode === 'advanced' && e.detail ? ' [' + e.detail + ']' : ''); }
     return t('err.unknown') + (e && e.message ? ' [' + e.message + ']' : '');
   }
+  /* The same recording reached by two routes (loose file and zip, copy "(1)", folder dropped twice) is recognised by what it contains: start time,
+     number of readings and the last counters. Update packs have no readings and are told apart by file name. */
+  const contentKey = (rec) => {
+    const rs = (rec.events.find((e) => e.name === 'RecordStart') || {}).date || '', n = rec.samples.length, l = rec.samples[n - 1];
+    return n && rs ? rs + '|' + n + '|' + l.tt.toFixed(3) + '|' + l.tm.toFixed(3) + '|' + l.v.toFixed(6) : 'file:' + rec.meta.fileName + '|' + rec.meta.size;
+  };
   function addBuffer(name, buf) {
-    const rec = G.parseBuffer(name, buf);
-    const entry = { id: rec.id, rec, ov: {}, comment: '' };
+    const rec = G.parseBuffer(name, buf), ck = contentKey(rec);
+    if (S.entries.some((x) => x.ck === ck)) { const e = new Error('duplicate'); e.code = 'duplicate'; throw e; }
+    const entry = { id: rec.id, rec, ov: {}, comment: '', ck };
     S.entries.push(entry); S.cur = entry.id;
     return entry;
   }
@@ -65,39 +72,54 @@
     return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = () => reject(r.error || new Error('read')); r.readAsArrayBuffer(f); });
   }
   const tick = () => new Promise((r) => setTimeout(r, 0));
+  let intakeQueue = Promise.resolve(), intakeEpoch = 0;
   /* files, folders and .zip archives; any number (the work is sliced so the page stays responsive and shows progress) */
-  async function addFiles(input) {
+  function addFiles(input) {
     const descs = Array.from(input || []).map((f) => (f && f.read ? f : G.intake.describe(f, !!f.webkitRelativePath)));
-    if (!descs.length) return;
-    S.load = { done: 0, total: descs.length }; if (S.mode === 'export') G.exporter.render();
-    let ex; try { ex = await G.intake.expand(descs); } catch (e) { ex = { items: [], ignored: 0, failed: [{ name: '', code: 'notZip' }] }; }
-    ex.failed.forEach((f) => { S.skipped.push({ name: f.name, text: t('err.' + f.code) }); S.errors.push({ name: f.name, text: t('err.' + f.code) }); });
-    if (ex.ignored) S.skipped.push({ name: '', text: t('x.ignored', { n: ex.ignored }) });
-    S.load = { done: 0, total: ex.items.length };
-    const seen = new Set(S.entries.map((e) => e.key)); let added = 0, last = Date.now();
-    for (const d of ex.items) {
-      const key = d.path + '|' + d.size + '|' + d.mtime;
-      if (seen.has(key)) S.skipped.push({ name: d.name, text: t('err.duplicate') });
-      else {
-        try { const e = addBuffer(d.name, await d.read()); e.key = key; seen.add(key); added++; }
-        catch (e) { const txt = errorText(e); S.errors.push({ name: d.name, text: txt }); S.skipped.push({ name: d.name, text: txt }); }
+    const epoch = intakeEpoch, task = intakeQueue.then(() => readFiles(descs, epoch));
+    intakeQueue = task.catch(() => {}); // a failed batch must not prevent later imports
+    return task;
+  }
+  async function readFiles(descs, epoch) {
+    if (!descs.length || epoch !== intakeEpoch) return;
+    S.load = { done: 0, total: descs.length };
+    try {
+      if (S.mode === 'export') G.exporter.render();
+      let ex; try { ex = await G.intake.expand(descs); } catch (e) { ex = { items: [], ignored: 0, failed: [{ name: '', code: 'notZip' }] }; }
+      if (epoch !== intakeEpoch) return;
+      ex.failed.forEach((f) => { S.skipped.push({ name: f.name, text: t('err.' + f.code) }); S.errors.push({ name: f.name, text: t('err.' + f.code) }); });
+      if (ex.ignored) S.skipped.push({ name: '', text: t('x.ignored', { n: ex.ignored }) });
+      S.load = { done: 0, total: ex.items.length };
+      const seen = new Set(S.entries.map((e) => e.key)); let added = 0, last = Date.now();
+      for (const d of ex.items) {
+        const key = d.path + '|' + d.size + '|' + d.mtime;
+        if (seen.has(key)) S.skipped.push({ name: d.name, text: t('err.duplicate') });
+        else {
+          try {
+            const buf = await d.read(); if (epoch !== intakeEpoch) return;
+            const e = addBuffer(d.name, buf); e.key = key; seen.add(key); added++;
+          } catch (e) {
+            if (epoch !== intakeEpoch) return;
+            const txt = errorText(e); if (!e || e.code !== 'duplicate') S.errors.push({ name: d.name, text: txt }); S.skipped.push({ name: d.name, text: txt });
+          }
+        }
+        S.load.done++;
+        if (Date.now() - last > 60) { if (S.mode === 'export') G.exporter.render(); await tick(); if (epoch !== intakeEpoch) return; last = Date.now(); }
       }
-      S.load.done++;
-      if (Date.now() - last > 60) { if (S.mode === 'export') G.exporter.render(); await tick(); last = Date.now(); }
+      if (added && S.mode === 'simple') S.tab = 'overview';
+    } finally {
+      if (epoch === intakeEpoch) { S.load = null; render(); }
     }
-    S.load = null;
-    if (added && S.mode === 'simple') S.tab = 'overview';
-    render();
   }
   function loadSamples() {
     for (const s of window.GV_SAMPLES || []) {
       if (S.entries.some((e) => e.key === 'sample:' + s.name)) continue;
-      try { const e = addBuffer(s.name, G.b64ToBuffer(s.b64)); e.key = 'sample:' + s.name; } catch (e) { S.errors.push({ name: s.name, text: errorText(e) }); }
+      try { const e = addBuffer(s.name, G.b64ToBuffer(s.b64)); e.key = 'sample:' + s.name; } catch (e) { if (!e || e.code !== 'duplicate') S.errors.push({ name: s.name, text: errorText(e) }); }
     }
     render();
   }
   function removeEntry(id) { S.entries = S.entries.filter((e) => e.id !== id); if (S.cur === id) S.cur = S.entries.length ? S.entries[0].id : null; render(); }
-  function clearAll() { S.entries = []; S.cur = null; S.errors = []; S.skipped = []; render(); }
+  function clearAll() { intakeEpoch++; S.load = null; S.entries = []; S.cur = null; S.errors = []; S.skipped = []; render(); }
 
   /* ---------- building documents ---------- */
   function build(backend, kind, entries, layout) {
