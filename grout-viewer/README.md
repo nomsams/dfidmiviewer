@@ -68,6 +68,7 @@ Automatic (follows the OS), Light, Dark, Forest, Ocean, Sunset, High contrast. E
 * Classic scripts only (no modules, no network, no build): works from `file://` and under any sub-path.
 * Needs a current Chrome, Edge, Firefox or Safari (ES2017 + canvas + Blob). Older browsers get a clear message instead of a blank page.
 * Files are validated strictly (tar and record checksums, XML structure, text-vs-binary cross-check). Damaged or foreign files are refused with a plain-language reason; update packages (`.DMJ`) are recognised.
+* Real field files are tolerated: tried on 100 files from the site (all load). The volume counter loses a few millilitres when the pump restarts, the measuring clock can step back by rounding noise, and a record with no injection can read a negative volume. Such counters are continued from their earlier value (a larger step, over 1 s or 1 l, adds a warning to the file) instead of refusing the file.
 * Very large recordings and degenerate ones (empty, one sample, no events) are handled; all layouts × languages × document types are covered by tests.
 
 ## Development

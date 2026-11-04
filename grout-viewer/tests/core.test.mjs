@@ -89,7 +89,8 @@ test('a text-only archive and a bare REC.TXT are read (lower precision, flagged)
   assert.equal(code(() => G.parseBuffer('REC.TXT', new TextEncoder().encode(txt.replace('93000780', '93000999')).buffer)), 'unsupportedChannels');
   assert.equal(code(() => G.parseBuffer('REC.TXT', new TextEncoder().encode(txt.replace('\ts\ts\tPa', '\ts\ts\tfurlongs')).buffer)), 'unsupportedUnits');
   const dec = G.parseBuffer('REC.TXT', new TextEncoder().encode(txt.replace(/0\.0001/g, '0,0001')).buffer); assert.equal(dec.samples.length, 4); // decimal commas
-  assert.equal(code(() => G.parseBuffer('REC.TXT', new TextEncoder().encode(txt.replace('\t\t2\t2\t', '\t\t0\t0\t')).buffer)), 'resetCounters');
+  const reset = G.parseBuffer('REC.TXT', new TextEncoder().encode(txt.replace('\t\t2\t2\t', '\t\t0\t0\t')).buffer); // a counter that restarts is continued, not refused
+  assert.ok(reset.samples.every((x, i, a) => !i || (x.tt >= a[i - 1].tt && x.tm >= a[i - 1].tm && x.v >= a[i - 1].v)), 'counters never go backwards');
 });
 
 test('malformed XML and oversize files are refused', () => {
@@ -145,3 +146,4 @@ test('SVG back-end keeps repeated spaces (the original prints "DLGPVD  6.61" and
   const doc = G.svgDoc(), p = doc.addPage(100, 50); p.text('a  b', 10, 10, { size: 8 });
   const svg = p.svg(); assert.match(svg, /xml:space="preserve"/); assert.match(svg, />a {2}b</);
 });
+

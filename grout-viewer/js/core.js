@@ -110,15 +110,26 @@
       return values[j] * FACTORS[i][u];
     });
     const [tt, tm, p, q, v] = si;
-    if (tt < 0 || tm < 0 || v < 0) fail('invalidSamples');
+    if (tt < 0 || tm < 0) fail('invalidSamples', 'negative time'); // a volume counter can read slightly below zero; counterSteps() continues it
     const extra = {};
     channels.forEach((c, i) => { if (!REQUIRED.includes(c)) extra[c] = values[i]; });
     return { tt, tm, p, q, v, pBar: p / 1e5, qLmin: q * 60000, vL: v * 1000, extra };
   }
-  function validateOrder(s) {
-    for (let i = 1; i < s.length; i++) {
-      if (s[i].tt < s[i - 1].tt || s[i].tm < s[i - 1].tm || s[i].v + 1e-9 < s[i - 1].v) fail('resetCounters', 'row ' + (i + 1));
+  /* Real devices let the counters step backwards: the volume counter loses a few millilitres when the pump restarts, the measuring clock
+     moves by rounding noise, or a counter is reset. The three counters are continued from the value they had (every later sample is shifted by the
+     same amount, so all increments are kept; the original adds up only the positive steps of the measuring time as well). Returns the number of
+     steps that were larger than noise (more than 1 s, or 1 l), so the file can say so. */
+  function counterSteps(s) {
+    const off = { tt: 0, tm: 0, v: 0 }, prev = {}, tol = { tt: 1, tm: 1, v: 0.001 }; let big = 0;
+    for (let i = 0; i < s.length; i++) {
+      for (const k of ['tt', 'tm', 'v']) {
+        let x = s[i][k] + off[k];
+        if (i > 0 && x < prev[k]) { if (prev[k] - x > tol[k]) big++; off[k] += prev[k] - x; x = prev[k]; }
+        s[i][k] = x; prev[k] = x;
+      }
+      s[i].vL = s[i].v * 1000;
     }
+    return big;
   }
 
   function parseRecTxt(text) {
@@ -149,7 +160,6 @@
         });
       }
     }
-    validateOrder(samples);
     return { samples, events, channels, units };
   }
 
@@ -167,7 +177,6 @@
       if (!vals.every(Number.isFinite)) fail('invalidBinary', 'value at byte ' + off);
       out.push(makeSample(vals, channels, units));
     }
-    validateOrder(out);
     return { samples: out, width };
   }
 
@@ -256,6 +265,8 @@
     meta.setConsRaw = (lastOf('SetCons') || {}).data || ''; meta.ginRaw = (lastOf('Gin') || {}).data || '';
     meta.infoProc = (tagList(xmlDoc(xmlText('INFO.XML')), 'Proc')[0] || {}).Txt || '';
 
+    /* the text and binary copies were compared above; now the counters are made continuous */
+    const steps = counterSteps(samples); if (steps) { rec.warnings.push('counterReset'); meta.counterSteps = steps; }
     rec.samples = samples; rec.events = events;
     const starts = events.filter((e) => e.name === 'MeasureDStart').length, stops = events.filter((e) => e.name === 'MeasureDStop').length;
     if (!samples.length) rec.warnings.push('noData');

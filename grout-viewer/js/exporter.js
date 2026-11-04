@@ -50,7 +50,7 @@
       shown.map((e) => {
         const it = itemOf(e), d = rs(e);
         return '<tr data-id="' + e.id + '" class="' + (X.off.has(e.id) ? 'off' : '') + '"><td class="c"><input type="checkbox" data-pick aria-label="' + esc(it.hdr.job || e.rec.meta.fileName) + '"' + (X.off.has(e.id) ? '' : ' checked') + '></td>' +
-          '<td><b>' + esc(it.hdr.job || '–') + '</b><small>' + esc(e.rec.meta.fileName) + '</small></td><td>' + esc(d.slice(0, 10)) + ' <small>' + esc(d.slice(11, 19)) + '</small></td><td class="r">' + esc(Number.isFinite(it.st.vol) ? String(Math.round(it.st.vol * 10) / 10) : '–') + '</td>' +
+          '<td><b>' + esc(it.hdr.job || '–') + '</b><small>' + esc(e.rec.meta.fileName) + (it.st.ok && !(it.st.vol > 0) ? ' · <i class="pill">' + esc(t('x.empty')) + '</i>' : '') + '</small></td><td>' + esc(d.slice(0, 10)) + ' <small>' + esc(d.slice(11, 19)) + '</small></td><td class="r">' + esc(Number.isFinite(it.st.vol) ? String(Math.round(it.st.vol * 10) / 10) : '–') + '</td>' +
           '<td class="act"><button type="button" class="ico" data-view title="' + esc(t('x.view')) + '" aria-label="' + esc(t('x.view')) + '">⌕</button><button type="button" class="ico" data-del title="' + esc(t('x.remove')) + '" aria-label="' + esc(t('x.remove')) + '">×</button></td></tr>';
       }).join('') + '</tbody>';
     $('#xListMore').innerHTML = list.length > shown.length ? '<button type="button" class="btn small" id="xShowAll">' + esc(t('x.showall', { n: list.length })) + '</button>' : (!list.length ? '<p class="fine">' + esc(t('x.nomatch')) + '</p>' : '');

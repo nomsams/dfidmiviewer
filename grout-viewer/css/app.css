@@ -279,3 +279,4 @@ body.locked > :not(#gate):not(script):not(svg) { filter:blur(12px); pointer-even
 @media (prefers-reduced-motion: reduce) { .gate-box.shake { animation:none; } }
 .gate-box input { font:inherit; color:var(--text); background:var(--surface2); border:1px solid var(--border); border-radius:10px; }
 .gate-box input:focus { border-color:var(--accent); outline:none; box-shadow:0 0 0 3px var(--band); }
+.xt .pill { font-style:normal; font-size:.72rem; background:var(--warn-bg); color:var(--warn); border-radius:99px; padding:1px 8px; margin-left:2px; white-space:nowrap; }

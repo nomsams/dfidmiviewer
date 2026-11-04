@@ -9,6 +9,8 @@
   };
   const T = {
     en: {
+      'x.empty': 'No injection recorded',
+      'warn.counterReset': 'A time or volume counter stepped backwards during the recording (for example after a reset). The curves continue from the earlier value.',
       'gate.sub': 'Enter the password to use this tool.', 'gate.pw': 'Password', 'gate.unlock': 'Unlock', 'gate.wrong': 'Wrong password', 'gate.lock': 'Lock the tool', 'nav.pq': 'Open PQ-Registration (pqview)',
       'mode.export': 'Excel export', 'mode.simple': 'Reports',
       'x.title': 'Make an Excel file from your measurements', 'x.sub': 'Drop one or many .DFI files here. Whole folders and .zip files work too.',
@@ -31,6 +33,8 @@
       ...Object.fromEntries(Object.entries(COL.en).map(([k, v]) => ['xc.' + k, v])),
     },
     sv: {
+      'x.empty': 'Ingen injektering registrerad',
+      'warn.counterReset': 'En tid- eller volymräknare gick bakåt under registreringen (till exempel efter en nollställning). Kurvorna fortsätter från det tidigare värdet.',
       'gate.sub': 'Ange lösenordet för att använda verktyget.', 'gate.pw': 'Lösenord', 'gate.unlock': 'Lås upp', 'gate.wrong': 'Fel lösenord', 'gate.lock': 'Lås verktyget', 'nav.pq': 'Öppna PQ-Registration (pqview)',
       'mode.export': 'Excel-export', 'mode.simple': 'Rapporter',
       'x.title': 'Gör en Excel-fil av dina mätningar', 'x.sub': 'Släpp en eller flera .DFI-filer här. Hela mappar och .zip-filer fungerar också.',
@@ -53,6 +57,8 @@
       ...Object.fromEntries(Object.entries(COL.sv).map(([k, v]) => ['xc.' + k, v])),
     },
     fr: {
+      'x.empty': 'Aucune injection enregistrée',
+      'warn.counterReset': 'Un compteur de temps ou de volume a reculé pendant l’enregistrement (par exemple après une remise à zéro). Les courbes continuent à partir de la valeur précédente.',
       'gate.sub': 'Saisissez le mot de passe pour utiliser cet outil.', 'gate.pw': 'Mot de passe', 'gate.unlock': 'Déverrouiller', 'gate.wrong': 'Mot de passe incorrect', 'gate.lock': 'Verrouiller l’outil', 'nav.pq': 'Ouvrir PQ-Registration (pqview)',
       'mode.export': 'Export Excel', 'mode.simple': 'Rapports',
       'x.title': 'Créer un fichier Excel à partir de vos mesures', 'x.sub': 'Déposez un ou plusieurs fichiers .DFI ici. Les dossiers entiers et les fichiers .zip fonctionnent aussi.',
@@ -75,6 +81,8 @@
       ...Object.fromEntries(Object.entries(COL.fr).map(([k, v]) => ['xc.' + k, v])),
     },
     no: {
+      'x.empty': 'Ingen injisering registrert',
+      'warn.counterReset': 'En tid- eller volumteller gikk bakover under registreringen (for eksempel etter en nullstilling). Kurvene fortsetter fra den tidligere verdien.',
       'gate.sub': 'Skriv inn passordet for å bruke verktøyet.', 'gate.pw': 'Passord', 'gate.unlock': 'Lås opp', 'gate.wrong': 'Feil passord', 'gate.lock': 'Lås verktøyet', 'nav.pq': 'Åpne PQ-Registration (pqview)',
       'mode.export': 'Excel-eksport', 'mode.simple': 'Rapporter',
       'x.title': 'Lag en Excel-fil av målingene dine', 'x.sub': 'Slipp én eller flere .DFI-filer her. Hele mapper og .zip-filer fungerer også.',
